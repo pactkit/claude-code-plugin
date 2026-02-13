@@ -1,0 +1,22 @@
+{
+  "name": "pactkit",
+  "version": "1.0.0",
+  "description": "Spec-driven agentic DevOps toolkit — PDCA workflows, role-based agents, and behavioral governance for Claude Code",
+  "author": {
+    "name": "PactKit",
+    "url": "https://github.com/pactkit"
+  },
+  "homepage": "https://pactkit.dev",
+  "repository": "https://github.com/pactkit/pactkit",
+  "license": "MIT",
+  "keywords": [
+    "devops",
+    "pdca",
+    "spec-driven",
+    "tdd",
+    "governance",
+    "claude-code",
+    "ai-agent",
+    "multi-agent"
+  ]
+}
