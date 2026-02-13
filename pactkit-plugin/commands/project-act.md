@@ -24,9 +24,9 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🎬 Phase 1: Precision Targeting
 1.  **Visual Scan**: Run `visualize --focus <module>` to see neighbors.
 2.  **Call Chain**: Run `visualize --mode call --entry <function>` to trace call dependencies.
-3.  **Trace Verification**:
+3.  **Trace Verification** — use pactkit-trace skill:
     - Before touching any code, confirm the call site.
-    - Run: `/project-trace "Find where [Function X] is called"`
+    - Use `Grep` to find all callers, then `visualize --mode call --entry <func>` to trace dependencies.
     - *Goal*: Ensure you don't break existing callers.
 
 ## 🎬 Phase 2: Test Scaffolding (TDD)

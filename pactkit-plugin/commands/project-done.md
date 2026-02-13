@@ -64,7 +64,12 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 2.  **Auto-Fix**:
     - If tests are GREEN but tasks are `[ ]`, **Ask the user**: "Tests passed but tasks are unchecked. Mark as done?"
     - If user agrees, update `sprint_board.md` immediately.
-3.  **Memory MCP (Conditional)**: IF `mcp__memory__add_observations` tool is available, record lessons learned:
+3.  **Lessons Auto-append (MANDATORY)**: Append a new row to `docs/architecture/governance/lessons.md`:
+    - Format: `| {YYYY-MM-DD} | {one-line summary of what was learned} | {STORY_ID} |`
+    - Date: today's date
+    - Summary: one sentence describing the key insight, pattern, or pitfall from this Story
+    - This is NOT conditional on Memory MCP — always append to lessons.md
+4.  **Memory MCP (Conditional)**: IF `mcp__memory__add_observations` tool is available, record lessons learned:
     - Use `mcp__memory__add_observations` on the `{STORY_ID}` entity with: implementation patterns used, pitfalls encountered, key files modified, and any non-obvious decisions made during implementation
     - This builds a cumulative project knowledge base that persists across sessions
 
@@ -81,6 +86,42 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 4.  **Skip**: If no deployer is detected, skip this phase and note "No deployer found — skipping deploy verification."
 5.  **Gate**: If deployment or verification fails, **STOP**. Do NOT proceed to commit.
 
+## 🎬 Phase 3.8: Release (Conditional) — use pactkit-release skill
+> If this Story involves a version bump, invoke the release workflow:
+1.  **Detect**: Check if `pyproject.toml` version was changed in this Story.
+2.  **If yes**: Run `update_version`, `snapshot`, and `archive` via pactkit-board skill. Tag with `git tag`.
+3.  **If no**: Skip to Phase 4.
+
 ## 🎬 Phase 4: Git Commit
 1.  **Format**: `feat(scope): <title from spec>`
 2.  **Execute**: Run the git commit command.
+
+## 🎬 Phase 4.5: Session Context Update
+> **Purpose**: Generate `docs/product/context.md` so the next session auto-loads project state.
+1.  **Read Board**: Read `docs/product/sprint_board.md` and extract:
+    - Stories in 🔄 In Progress (with IDs and titles)
+    - Stories in 📋 Backlog (count)
+    - Stories in ✅ Done (most recent 3, with IDs and titles)
+2.  **Read Lessons**: Read `docs/architecture/governance/lessons.md` and extract the last 5 entries.
+3.  **Active Branches**: Run `git branch --list 'feature/*' 'fix/*'` to list active branches.
+4.  **Write Context**: Write `docs/product/context.md` with this format:
+    ```markdown
+    # Project Context (Auto-generated)
+    > Last updated: {ISO timestamp} by /project-done
+
+    ## Sprint Status
+    {In Progress stories with IDs | Backlog count | Done count}
+
+    ## Recent Completions
+    {Last 3 completed stories, one line each}
+
+    ## Active Branches
+    {git branch output, or "None" if no feature/fix branches}
+
+    ## Key Decisions
+    {Last 5 lessons from lessons.md}
+
+    ## Next Recommended Action
+    {If In Progress stories exist: `/project-act STORY-XXX` | If only Backlog: `/project-plan` | If board empty: `/project-design`}
+    ```
+5.  **Commit Context**: `git add docs/product/context.md && git commit --amend --no-edit` to include context.md in the commit.

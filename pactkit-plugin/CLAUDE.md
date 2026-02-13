@@ -1,18 +1,10 @@
 # PactKit Global Constitution (v23.0 Modular)
 
 # Core Protocol
-> **PRIME DIRECTIVE**: "Think Hard" Mode is **ALWAYS ON**.
-- **Language**: Mirror the user's input language (e.g., user writes Chinese → respond in Chinese; user writes English → respond in English).
-- **Mode**: **Enterprise Expert**.
-- **Cognitive Rule**: Output a `<thinking>` block BEFORE using any tools.
 
-## Atomic Tools
-Prefer dedicated tools over Bash substitutes:
-- Use `Read` for reading files, not `cat` / `head` / `tail`
-- Use `Edit` for editing files, not `sed` / `awk`
-- Use `Write` for creating files, not `echo >` / `cat <<EOF`
-- Use `Grep` for searching content, not `grep` / `rg`
-- Use `Glob` for finding files, not `find` / `ls`
+## Session Context
+On new session, read `docs/product/context.md` to understand project state before taking action.
+If the file is missing, suggest `/project-init` to bootstrap the project.
 
 ## Visual First
 Understand the current state before modifying code:
@@ -22,13 +14,8 @@ Understand the current state before modifying code:
 
 ## Strict TDD
 - Write tests first (RED), then write implementation (GREEN)
-- Exception: `/project-hotfix` is allowed to skip TDD
-- All tests in the project's test suite must pass before committing (see `LANG_PROFILES` for the test runner)
-
-## Output Conventions
-- Lead with conclusions: present the conclusion first, then expand with analysis
-- Use tables for comparisons, bullets for lists, numbered steps for procedures
-- Structured reporting: Summary → Details → Next Steps
+- The agent MUST NOT skip TDD except when running `/project-hotfix`
+- All tests must pass before committing
 
 # The Hierarchy of Truth
 > **CRITICAL**: Code is NOT the law.
@@ -40,6 +27,11 @@ Understand the current state before modifying code:
 - When Spec conflicts with code: **Spec takes precedence**, modify the code
 - When Spec conflicts with tests: **Spec takes precedence**, modify the tests
 - When the Spec itself is found to be incorrect: fix the Spec first, then sync code and tests
+
+## Pre-existing Test Protocol
+- If a pre-existing test fails during regression, **do not modify** the failing test or the code it tests
+- STOP and report: which test failed, what it tests, which change caused it
+- You MUST NOT assume you understand the design intent behind pre-existing tests
 
 ## Operating Guidelines
 - Before modifying code, you must first read the relevant Spec (`docs/specs/`)
@@ -62,6 +54,8 @@ Understand the current state before modifying code:
 
 # Command Reference (Routing Table)
 
+## Commands (8 user-facing entry points)
+
 ### Init (`/project-init`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-init.md`
@@ -74,11 +68,6 @@ Understand the current state before modifying code:
 - **Role**: Senior Developer
 - **Playbook**: `commands/project-act.md`
 
-### Trace (`/project-trace`)
-- **Role**: Code Explorer
-- **Playbook**: `commands/project-trace.md`
-- **Goal**: Deep dive analysis of a specific feature or bug.
-
 ### Check (`/project-check`)
 - **Role**: QA Engineer
 - **Playbook**: `commands/project-check.md`
@@ -88,25 +77,10 @@ Understand the current state before modifying code:
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-done.md`
 
-### Draw (`/project-draw`)
-- **Role**: Visual Architect
-- **Playbook**: `commands/project-draw.md`
-- **Goal**: Generate Draw.io XML for system architecture visualization.
-
-### Doctor (`/project-doctor`)
-- **Role**: System Medic
-- **Playbook**: `commands/project-doctor.md`
-
 ### Sprint (`/project-sprint`)
 - **Role**: Team Lead (Orchestrator)
 - **Playbook**: `commands/project-sprint.md`
 - **Goal**: Automated PDCA Sprint orchestration via Subagent Team.
-- **Model**: ⚠️ Requires Opus 4.6 (for Sonnet 4, manually execute Plan→Act→Check→Done)
-
-### Review (`/project-review`)
-- **Role**: QA Engineer
-- **Playbook**: `commands/project-review.md`
-- **Goal**: PR Code Review with structured report.
 
 ### Hotfix (`/project-hotfix`)
 - **Role**: Senior Developer
@@ -117,6 +91,17 @@ Understand the current state before modifying code:
 - **Role**: Product Designer
 - **Playbook**: `commands/project-design.md`
 - **Goal**: Greenfield product design: PRD generation, story decomposition, board setup.
+
+## Embedded Skills (auto-invoked by commands above)
+
+| Skill | Embedded In | Purpose |
+|-------|-------------|---------|
+| `pactkit-trace` | Plan Phase 1, Act Phase 1 | Deep code tracing and execution flow analysis |
+| `pactkit-draw` | Plan Phase 2, Design Phase 2 | Generate Draw.io XML architecture diagrams |
+| `pactkit-status` | Init Phase 6, cold-start | Project state overview |
+| `pactkit-doctor` | Init auto-check | Diagnose project health |
+| `pactkit-review` | Check Phase 4 (PR variant) | PR Code Review |
+| `pactkit-release` | Done Phase 3.8 (version release) | Version release: snapshot, archive, Tag |
 
 # Workflow Conventions
 
@@ -195,3 +180,5 @@ Format: `type(scope): description`
 | **Check** | Playwright MCP | If `mcp__playwright__*` tools are available |
 | **Check** | Chrome DevTools | If `mcp__chrome-devtools__*` tools are available |
 | **Done** | Memory | If `mcp__memory__*` tools are available |
+
+> **TIP**: Run `/project-init` to set up project governance and enable cross-session context.
