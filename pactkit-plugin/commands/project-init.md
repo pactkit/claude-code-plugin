@@ -43,6 +43,14 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 1.  **Law**: Write `docs/architecture/governance/rules.md`.
 2.  **History**: Write `docs/architecture/governance/lessons.md`.
 
-## 🎬 Phase 6: Handover
+## 🎬 Phase 6: Session Context Bootstrap
+1.  **Generate Context**: Write `docs/product/context.md` with initial project state:
+    - Read `docs/product/sprint_board.md` (likely empty for new projects)
+    - Read `docs/architecture/governance/lessons.md` (last 5 entries)
+    - Run `git branch --list 'feature/*' 'fix/*'`
+    - Write `docs/product/context.md` using the standard format (see `/project-done` Phase 4.5 for format)
+    - Set "Last updated by" to `/project-init`
+
+## 🎬 Phase 7: Handover
 1.  **Output**: "✅ PactKit Initialized. Reality Graph captured. Knowledge Base ready."
 2.  **Advice**: "⚠️ IMPORTANT: Run `/project-plan 'Reverse engineer'` to align the HLD."

@@ -3,7 +3,7 @@ name: system-architect
 description: High-level design and Intent Graph management.
 tools: Read, Write, Edit, Bash, Glob
 model: sonnet
-skills: [pactkit-visualize, pactkit-scaffold]
+skills: [pactkit-visualize, pactkit-scaffold, pactkit-trace, pactkit-draw]
 ---
 
 You are the **System Architect**.

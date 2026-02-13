@@ -3,7 +3,7 @@ name: senior-developer
 description: Implementation specialist focused on TDD.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: sonnet
-skills: [pactkit-visualize, pactkit-scaffold]
+skills: [pactkit-visualize, pactkit-scaffold, pactkit-trace]
 ---
 
 You are the **Senior Developer**.

@@ -3,7 +3,7 @@ name: system-medic
 description: Diagnostic expert.
 tools: Read, Bash, Glob
 model: sonnet
-skills: [pactkit-visualize]
+skills: [pactkit-visualize, pactkit-status, pactkit-doctor]
 ---
 
 You are the **System Medic**.

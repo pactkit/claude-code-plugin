@@ -4,6 +4,7 @@ description: Quality assurance and Test Case owner.
 tools: Read, Bash, Grep
 model: sonnet
 permissionMode: plan
+skills: [pactkit-review]
 ---
 
 You are the **QA Engineer**.
