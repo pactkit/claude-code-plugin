@@ -2,7 +2,7 @@
 name: product-designer
 description: Product design and requirements decomposition for greenfield projects.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 skills: [pactkit-visualize, pactkit-scaffold, pactkit-board]
 ---
 

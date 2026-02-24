@@ -29,6 +29,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🎬 Phase 1: Archaeology (The "Know Before You Change" Step)
 1.  **Visual Scan**: Run `visualize` to see the module dependency graph.
     - **Mode Selection**: Use `--mode class` for structure analysis, `--mode call` for logic modification, default for overview.
+    - **Large Codebase Heuristic**: If the project has more than 50 source files, use `--focus <module> --depth 2` instead of a full graph to avoid context window pollution.
 2.  **Logic Trace (CRITICAL)** — use pactkit-trace skill:
     - If modifying existing logic, trace the current implementation:
       Use `Grep` to locate entry points, then `visualize --mode call --entry <func>` to map call chains.
@@ -50,10 +51,16 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **Memory MCP (Conditional)**: IF `mcp__memory__create_entities` tool is available, store the design context:
     - Use `mcp__memory__create_entities` with: `name: "{STORY_ID}"`, `entityType: "story"`, `observations: [key architectural decisions, target files, design rationale]`
     - IF this story depends on other stories, use `mcp__memory__create_relations` to record dependencies (e.g., `from: "{STORY_ID}", to: "STORY-XXX", relationType: "depends_on"`)
-4.  **Session Context Update**: Update `docs/product/context.md` to reflect the new Story:
+4.  **Issue Tracker (Conditional)**: IF `pactkit.yaml` has `issue_tracker.provider: github`:
+    - Check if `gh` CLI is available (run `gh --version`)
+    - If available: create a GitHub Issue with `gh issue create --title "STORY-XXX: Title" --body "Requirements summary"`
+    - Update the Sprint Board entry to include the issue URL
+    - If `gh` CLI is unavailable or issue creation fails: print warning, continue without issue link
+    - If `issue_tracker.provider: none` or section missing: skip silently
+5.  **Session Context Update**: Update `docs/product/context.md` to reflect the new Story:
     - Read `docs/product/sprint_board.md` (now containing the new Story)
     - Read `docs/architecture/governance/lessons.md` (last 5 entries)
     - Run `git branch --list 'feature/*' 'fix/*'`
     - Write `docs/product/context.md` using the standard format (see `/project-done` Phase 4.5 for format)
     - Set "Last updated by" to `/project-plan`
-5.  **Handover**: "Trace complete. Spec created. Ready for Act."
+6.  **Handover**: "Trace complete. Spec created. Ready for Act."

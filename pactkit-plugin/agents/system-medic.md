@@ -2,7 +2,7 @@
 name: system-medic
 description: Diagnostic expert.
 tools: Read, Bash, Glob
-model: sonnet
+model: inherit
 skills: [pactkit-visualize, pactkit-status, pactkit-doctor]
 ---
 

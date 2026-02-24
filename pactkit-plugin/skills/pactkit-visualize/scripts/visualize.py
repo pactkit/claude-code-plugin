@@ -43,7 +43,7 @@ def _scan_files(root):
     return all_files, module_index, file_to_node
 
 # --- MODE: FILE (original, v19.7) ---
-def _build_file_graph(root, all_files, module_index, file_to_node, focus):
+def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=0, max_nodes=0):
     nodes = []
     edges = []
     for f in all_files:
@@ -52,6 +52,7 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus):
         nodes.append(f'    {nid}["{f.name}"]')
         nodes.append(f'    click {nid} href "{rel_str}"')
     seen_edges = set()
+    adjacency = {}  # node -> set of neighbor nodes (for depth limiting)
     for p in all_files:
         consumer_id = file_to_node[p]
         try:
@@ -77,6 +78,8 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus):
                             if edge not in seen_edges:
                                 seen_edges.add(edge)
                                 edges.append(edge)
+                            adjacency.setdefault(consumer_id, set()).add(pid)
+                            adjacency.setdefault(pid, set()).add(consumer_id)
         except: pass
 
     final_lines = ['graph TD']
@@ -97,8 +100,65 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus):
         final_lines.extend(relevant_edges)
         dest = root / 'docs/architecture/graphs/focus_graph.mmd'
     else:
-        final_lines.extend(nodes)
-        for src, dst in edges: final_lines.append(f'    {src} --> {dst}')
+        # Apply depth limiting via BFS if depth > 0
+        if depth > 0:
+            # Find root nodes (nodes with no incoming edges)
+            all_node_ids = set(file_to_node.values())
+            has_incoming = set()
+            for src, dst in edges:
+                has_incoming.add(dst)
+            root_nodes = all_node_ids - has_incoming
+            if not root_nodes:
+                root_nodes = all_node_ids  # fallback: use all
+
+            # BFS from root nodes up to depth levels
+            allowed = set()
+            frontier = set(root_nodes)
+            for _ in range(depth + 1):
+                allowed |= frontier
+                next_frontier = set()
+                for nid in frontier:
+                    for neighbor in adjacency.get(nid, set()):
+                        if neighbor not in allowed:
+                            next_frontier.add(neighbor)
+                frontier = next_frontier
+
+            # Filter nodes and edges
+            for line in nodes:
+                if any(nid in line for nid in allowed):
+                    final_lines.append(line)
+            for src, dst in edges:
+                if src in allowed and dst in allowed:
+                    final_lines.append(f'    {src} --> {dst}')
+        else:
+            final_lines.extend(nodes)
+            for src, dst in edges: final_lines.append(f'    {src} --> {dst}')
+
+        # Apply max_nodes truncation
+        if max_nodes > 0:
+            # Count actual node definition lines (contain "[" but not "click")
+            node_lines = [line for line in final_lines[1:] if '[' in line and 'click' not in line]
+            if len(node_lines) > max_nodes:
+                truncated_count = len(node_lines) - max_nodes
+                # Keep only the first max_nodes node IDs
+                keep_ids = set()
+                for line in node_lines[:max_nodes]:
+                    nid = line.strip().split('[')[0].strip()
+                    keep_ids.add(nid)
+                filtered = ['graph TD']
+                for line in final_lines[1:]:
+                    if '[' in line or 'click' in line:
+                        if any(nid in line for nid in keep_ids):
+                            filtered.append(line)
+                    elif '-->' in line:
+                        parts = line.strip().split('-->')
+                        src = parts[0].strip()
+                        dst = parts[1].strip()
+                        if src in keep_ids and dst in keep_ids:
+                            filtered.append(line)
+                filtered.append(f'    NOTE["... and {truncated_count} more nodes (use --max-nodes to adjust)"]')
+                final_lines = filtered
+
         dest = root / 'docs/architecture/graphs/code_graph.mmd'
     return dest, nl().join(final_lines)
 
@@ -275,7 +335,7 @@ def _resolve_callee(callee, all_func_names):
     return None
 
 # --- MAIN VISUALIZE (v20.0 Multi-Mode) ---
-def visualize(target='.', focus=None, mode='file', entry=None):
+def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0):
     root = Path(target).resolve()
     all_files, module_index, file_to_node = _scan_files(root)
 
@@ -284,7 +344,7 @@ def visualize(target='.', focus=None, mode='file', entry=None):
     elif mode == 'call':
         dest, content = _build_call_graph(root, all_files, focus, entry)
     else:
-        dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus)
+        dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes)
         if dest is None: return content  # error message
 
     if not dest.parent.exists(): dest.parent.mkdir(parents=True, exist_ok=True)
@@ -303,8 +363,10 @@ if __name__ == '__main__':
     p_viz.add_argument('--focus')
     p_viz.add_argument('--mode', choices=['file', 'class', 'call'], default='file')
     p_viz.add_argument('--entry')
+    p_viz.add_argument('--depth', type=int, default=0, help='Limit graph traversal to N levels (0=unlimited)')
+    p_viz.add_argument('--max-nodes', type=int, default=0, help='Truncate graph to N nodes (0=unlimited)')
 
     a = parser.parse_args()
     if a.cmd == 'init_arch': print(init_architecture())
-    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry))
+    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes))
     elif a.cmd == 'list_rules': print(list_rules())

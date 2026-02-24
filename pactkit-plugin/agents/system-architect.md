@@ -2,7 +2,9 @@
 name: system-architect
 description: High-level design and Intent Graph management.
 tools: Read, Write, Edit, Bash, Glob
-model: sonnet
+model: inherit
+permissionMode: plan
+memory: project
 skills: [pactkit-visualize, pactkit-scaffold, pactkit-trace, pactkit-draw]
 ---
 

@@ -33,6 +33,11 @@ Understand the current state before modifying code:
 - When Spec conflicts with tests: **Spec takes precedence**, modify the tests
 - When the Spec itself is found to be incorrect: fix the Spec first, then sync code and tests
 
+## RFC Protocol (Spec Amendment Escalation)
+- If the Senior Developer determines a Spec requirement is technically infeasible, contradictory, or would violate security/architectural constraints, they MUST invoke the RFC Protocol rather than producing non-compliant code
+- RFC Protocol: STOP implementation, report the infeasibility to the user, suggest alternatives, and wait for guidance
+- This exception does NOT weaken the general principle (Spec > Code) — it adds a safety valve for genuinely impossible requirements
+
 ## Pre-existing Test Protocol
 - If a pre-existing test fails during regression, **do not modify** the failing test or the code it tests
 - STOP and report: which test failed, what it tests, which change caused it
