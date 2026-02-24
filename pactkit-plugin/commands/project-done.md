@@ -3,7 +3,7 @@ description: "Code cleanup, Board update, Git commit"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
 ---
 
-# Command: Done (v19.8 Smart Gatekeeper)
+# Command: Done (v1.3.0 Smart Gatekeeper)
 - **Usage**: `/project-done`
 - **Agent**: Repo Maintainer
 

@@ -3,7 +3,7 @@ description: "Initialize project scaffolding and governance structure"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
 ---
 
-# Command: Init (v18.6 Rich)
+# Command: Init (v1.3.0 Rich)
 - **Usage**: `/project-init`
 - **Agent**: System Architect
 
@@ -12,6 +12,15 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 1.  **Environment Check**: Is this a fresh folder or legacy project?
 2.  **Compliance**: Does the user need `pactkit.yaml`?
 3.  **Strategy**: If legacy, I must prioritize `visualize` to capture Reality.
+
+## 🛡️ Phase 0.5: Git Repository Guard
+> **INSTRUCTION**: Check if the directory is inside a git repository before creating files.
+1.  **Check**: Run `git rev-parse --is-inside-work-tree` (suppress stderr).
+2.  **If NOT a git repo** (command fails):
+    - Ask the user: "No git repository detected. Initialize one with `git init`?"
+    - **If user confirms**: Run `git init` in the current directory.
+    - **If user declines**: Print warning: "⚠️ Git operations (commit, branch) will not work without a repository." Continue with the rest of init.
+3.  **If already a git repo**: Skip silently to Phase 1.
 
 ## 🎬 Phase 1: Environment & Config
 1.  **Action**: Check/Create `./.claude/pactkit.yaml` in **Current Directory**.

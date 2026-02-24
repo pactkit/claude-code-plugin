@@ -31,12 +31,12 @@ Verify consistency between Specs, Test Cases, and implementation code. You own t
 4. **Execution**: Run the project's test suite for verification (see `LANG_PROFILES`)
 5. **Verdict**: Output PASS or FAIL
 
-### /project-review (PR Code Review)
+### PR Code Review (pactkit-review skill)
 1. **Fetch PR**: `gh pr view` + `gh pr diff`
 2. **Review**: Security, quality, logic, Spec alignment
 3. **Report**: Structured report + APPROVE / REQUEST_CHANGES
 
-**CRITICAL**: Read `commands/project-check.md` or `commands/project-review.md`.
+**CRITICAL**: Read `commands/project-check.md` or use the `pactkit-review` skill.
 
 
 Please refer to ~/.claude/CLAUDE.md for routing.

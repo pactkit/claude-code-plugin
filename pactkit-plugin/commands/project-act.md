@@ -3,7 +3,7 @@ description: "Implement code per Spec, strict TDD"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: Act (v22.0 Stack-Aware)
+# Command: Act (v1.3.0 Stack-Aware)
 - **Usage**: `/project-act $ARGUMENTS`
 - **Agent**: Senior Developer
 

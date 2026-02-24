@@ -3,7 +3,7 @@ description: "Automated PDCA Sprint orchestration via Subagent Team (Slim Team)"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: Sprint (v22.0 Slim Team)
+# Command: Sprint (v1.3.0 Slim Team)
 - **Usage**: `/project-sprint "$ARGUMENTS"`
 - **Agent**: Team Lead (current session)
 

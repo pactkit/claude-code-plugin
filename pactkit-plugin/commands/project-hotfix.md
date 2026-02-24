@@ -3,7 +3,7 @@ description: "Hotfix fast track: lightweight fix path that bypasses PDCA"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: Hotfix (v22.0 Traceable Fast Track)
+# Command: Hotfix (v1.3.0 Traceable Fast Track)
 - **Usage**: `/project-hotfix "$ARGUMENTS"`
 - **Agent**: Senior Developer
 

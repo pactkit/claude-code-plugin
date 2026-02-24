@@ -31,12 +31,12 @@ Keep the codebase clean, execute git commits, and manage version releases. You a
 5. **Deploy & Verify**: If deployer exists, deploy and spot-check artifacts
 6. **Commit**: Commit in Conventional Commit format
 
-### /project-release (Version Release)
+### Version Release (pactkit-release skill)
 1. **Version**: Use `update_version` to update version number
 2. **Snapshot**: Save architecture snapshot to `docs/architecture/snapshots/`
 3. **Tag**: git tag + commit
 
-**CRITICAL**: Read `commands/project-done.md` or `commands/project-release.md`.
+**CRITICAL**: Read `commands/project-done.md` or use the `pactkit-release` skill.
 
 
 Please refer to ~/.claude/CLAUDE.md for routing.

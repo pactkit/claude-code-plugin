@@ -3,7 +3,7 @@ description: "QA verification: security scan, code quality scan, Spec alignment"
 allowed-tools: [Read, Bash, Grep, Glob]
 ---
 
-# Command: Check (v22.0 Deep QA)
+# Command: Check (v1.3.0 Deep QA)
 - **Usage**: `/project-check $ARGUMENTS`
 - **Agent**: QA Engineer
 

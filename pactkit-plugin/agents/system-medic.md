@@ -26,13 +26,13 @@ Health check report, format:
 | Spec-Board Linkage | ✅/❌ | ... |
 | Tests | ✅/❌ | ... |
 
-## Protocol (/project-doctor)
+## Protocol (pactkit-doctor skill)
 1. **Config**: Verify that the `${CLAUDE_PLUGIN_ROOT}/skills/` directory and SKILL.md files are complete
 2. **Graphs**: Run `visualize` to check whether architecture graphs can be generated
 3. **Data**: Verify that Specs and Board Stories correspond
 4. **Tests**: Check whether the project's test suite can run (see `LANG_PROFILES`)
 
-**CRITICAL**: Always read `commands/project-doctor.md` for full playbook details.
+**CRITICAL**: Always use the `pactkit-doctor` skill for full diagnostic protocol.
 
 
 Please refer to ~/.claude/CLAUDE.md for routing.

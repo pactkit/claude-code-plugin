@@ -15,8 +15,15 @@ def init_architecture():
     return '✅ Init: Structure Complete'
 
 # --- SCAN HELPERS (shared across modes) ---
+SCAN_EXCLUDES = {
+    'venv', '_venv', '.venv', '.env', 'env', '__pycache__', '.git', '.claude',
+    'tests', 'docs', 'node_modules', 'site-packages', 'dist', 'build',
+    'skills', 'commands', 'rules', 'agents',  # PactKit marketplace dirs (BUG-006)
+}
+
+
 def _scan_files(root):
-    excludes = {'venv', '_venv', '.venv', '.env', 'env', '__pycache__', '.git', '.claude', 'tests', 'docs', 'node_modules', 'site-packages', 'dist', 'build'}
+    excludes = SCAN_EXCLUDES
     all_files = []
     module_index = {}
     file_to_node = {}
@@ -42,7 +49,7 @@ def _scan_files(root):
         except: pass
     return all_files, module_index, file_to_node
 
-# --- MODE: FILE (original, v19.7) ---
+# --- MODE: FILE (v1.3.0) ---
 def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=0, max_nodes=0):
     nodes = []
     edges = []
@@ -250,7 +257,7 @@ def _build_call_graph(root, all_files, focus, entry):
         if not start:
             return root / 'docs/architecture/graphs/call_graph.mmd', f'graph TD{nl()}    ❌_not_found["{entry} not found"]'
 
-        # BFS
+        # BFS — only follow edges to project-defined functions (BUG-012)
         visited = set()
         queue = [start]
         reachable_edges = []
@@ -259,15 +266,10 @@ def _build_call_graph(root, all_files, focus, entry):
             if current in visited: continue
             visited.add(current)
             for callee in call_edges.get(current, []):
-                # Resolve callee to qualified name
                 resolved = _resolve_callee(callee, all_func_names)
                 if resolved:
                     reachable_edges.append((current, resolved))
                     if resolved not in visited: queue.append(resolved)
-                else:
-                    # Keep unresolved as leaf node
-                    reachable_edges.append((current, callee))
-                    visited.add(callee)
 
         lines = ['graph TD']
         safe = lambda s: s.replace('.', '_')
@@ -276,7 +278,7 @@ def _build_call_graph(root, all_files, focus, entry):
         for src, dst in reachable_edges:
             lines.append(f'    {safe(src)} --> {safe(dst)}')
     else:
-        # Full call graph (optionally filtered by focus)
+        # Full call graph — only edges where both endpoints are in func_registry (BUG-012)
         lines = ['graph TD']
         safe = lambda s: s.replace('.', '_')
         relevant = set()
@@ -285,45 +287,49 @@ def _build_call_graph(root, all_files, focus, entry):
         for caller, callees in call_edges.items():
             if focus and focus not in func_registry.get(caller, ''): continue
             for callee in callees:
-                resolved = _resolve_callee(callee, all_func_names) or callee
-                relevant.add(caller)
-                relevant.add(resolved)
-                rel_edges.append((caller, resolved))
-
-        # If no focus, include all
-        if not focus:
-            relevant = set(func_registry.keys())
-            for callees in call_edges.values():
-                for c in callees:
-                    resolved = _resolve_callee(c, all_func_names) or c
+                resolved = _resolve_callee(callee, all_func_names)
+                if resolved:
+                    relevant.add(caller)
                     relevant.add(resolved)
+                    rel_edges.append((caller, resolved))
 
         for fn in sorted(relevant): lines.append(f'    {safe(fn)}["{fn}"]')
         for src, dst in rel_edges: lines.append(f'    {safe(src)} --> {safe(dst)}')
-        if not rel_edges:
-            for caller, callees in call_edges.items():
-                for callee in callees:
-                    resolved = _resolve_callee(callee, all_func_names) or callee
-                    lines.append(f'    {safe(caller)} --> {safe(resolved)}')
 
     dest = root / 'docs/architecture/graphs/call_graph.mmd'
     if focus: dest = root / 'docs/architecture/graphs/focus_graph.mmd'
     return dest, nl().join(lines)
 
+_BUILTIN_CALLEES = {
+    'isinstance', 'len', 'sorted', 'set', 'dict', 'type', 'print', 'any',
+    'str', 'int', 'float', 'bool', 'list', 'tuple', 'range', 'enumerate',
+    'zip', 'map', 'filter', 'super', 'hasattr', 'getattr', 'setattr',
+    'repr', 'min', 'max', 'abs', 'round', 'open', 'all', 'id', 'hash',
+    'callable', 'vars', 'dir', 'hex', 'oct', 'bin', 'ord', 'chr', 'iter',
+    'next', 'reversed', 'slice', 'frozenset', 'bytes', 'bytearray',
+    'memoryview', 'property', 'staticmethod', 'classmethod', 'input',
+    'breakpoint', 'compile', 'eval', 'exec', 'format', 'globals', 'locals',
+    'object', 'issubclass', 'pow', 'divmod', 'sum', 'complex', 'delattr',
+    'NotImplementedError', 'ValueError', 'TypeError', 'KeyError',
+    'AttributeError', 'IndexError', 'RuntimeError', 'FileNotFoundError',
+    'OSError', 'IOError', 'StopIteration', 'Exception', 'ImportError',
+}
+
 def _extract_calls(func_node, current_class=None):
-    # Extract function/method calls from a function body.
+    # Extract function/method calls from a function body (BUG-012: filtered).
     callees = []
     for node in ast.walk(func_node):
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name):
-                callees.append(node.func.id)
+                name = node.func.id
+                if name not in _BUILTIN_CALLEES:
+                    callees.append(name)
             elif isinstance(node.func, ast.Attribute):
-                # self.method() → ClassName.method
+                # self.method() → ClassName.method (retain)
                 if isinstance(node.func.value, ast.Name):
                     if node.func.value.id == 'self' and current_class:
                         callees.append(f'{current_class}.{node.func.attr}')
-                    else:
-                        callees.append(f'{node.func.value.id}.{node.func.attr}')
+                    # Skip non-self local variable method calls (e.g., lines.append)
     return callees
 
 def _resolve_callee(callee, all_func_names):
@@ -334,7 +340,7 @@ def _resolve_callee(callee, all_func_names):
         if fn.endswith(f'.{callee}') or fn == callee: return fn
     return None
 
-# --- MAIN VISUALIZE (v20.0 Multi-Mode) ---
+# --- MAIN VISUALIZE (v1.3.0 Multi-Mode) ---
 def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0):
     root = Path(target).resolve()
     all_files, module_index, file_to_node = _scan_files(root)
