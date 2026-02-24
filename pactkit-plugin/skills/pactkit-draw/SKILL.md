@@ -31,3 +31,12 @@ Write the `.drawio` file following the Enterprise Style Dictionary and Anti-Bug 
 - Every `id` MUST be unique (use prefixes: `n_`, `e_`, `c_`).
 - Edge `mxCell` MUST have valid `source` and `target` attributes.
 - Container nodes MUST include `container=1` in their style.
+
+## MCP Mode (Conditional)
+IF `open_drawio_xml` tool is available (Draw.io MCP):
+1. Generate XML as usual and write to `.drawio` file (primary output).
+2. Call `open_drawio_xml` with the generated XML content to open it in Draw.io editor for instant preview.
+3. Optionally call `open_drawio_mermaid` to open existing `.mmd` files in Draw.io for interactive editing.
+
+IF Draw.io MCP tools are NOT available:
+- Fallback to the current behavior — write `.drawio` file to disk only.

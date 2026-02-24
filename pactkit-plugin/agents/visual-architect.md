@@ -25,6 +25,7 @@ Generate system architecture diagrams using Draw.io XML. Supports three diagram 
 2. **Components**: Extract components, assign style roles
 3. **Layout**: Calculate coordinates per the corresponding layout pattern
 4. **Generate**: Write to `.drawio` file
+5. **Preview (Conditional)**: IF Draw.io MCP tools are available, call `open_drawio_xml` with the generated XML to open it in the Draw.io editor for instant visual verification
 
 **CRITICAL**: Always read `commands/project-draw.md` for full playbook and style dictionary.
 

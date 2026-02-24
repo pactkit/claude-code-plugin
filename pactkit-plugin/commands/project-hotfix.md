@@ -29,7 +29,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 5.  **Create Spec**: Create a lightweight Spec at `docs/specs/HOTFIX-{NNN}.md` with:
     - Title, Background (one sentence), Target file/line, and what was fixed.
 6.  **Add Board Entry**: Add the hotfix to the Board:
-    - `python3 ~/.claude/skills/pactkit-board/scripts/board.py add_story HOTFIX-{NNN} "Short title" "Fix description"`
+    - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py add_story HOTFIX-{NNN} "Short title" "Fix description"`
 
 ## 🔧 Phase 1: Fix
 1.  **Fix**: Use `Edit` or `Write` to directly fix the target code.

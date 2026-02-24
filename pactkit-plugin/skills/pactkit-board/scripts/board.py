@@ -213,7 +213,9 @@ def archive_stories():
     active_parts = [parts[0]]
     archived_parts = []
     for part in parts[1:]:
-        if '- [ ]' in part:
+        has_done = '- [x]' in part
+        has_todo = '- [ ]' in part
+        if has_todo or not has_done:
             active_parts.append(part)
         else:
             archived_parts.append(part)

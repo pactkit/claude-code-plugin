@@ -21,8 +21,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
     - `rm -rf __pycache__ .pytest_cache`
     - `rm -f .DS_Store *.tmp *.log`
 2.  **Update Reality**:
-    - Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize`
-    - Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
+    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
 
 ## 🎬 Phase 2.5: Regression Gate (MANDATORY)
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.
@@ -75,7 +75,7 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 
 ## 🎬 Phase 3.5: Archive (Optional)
 1.  **Check**: Are all tasks for the current Story marked `[x]`?
-2.  **Action**: If yes, run `python3 ~/.claude/skills/pactkit-board/scripts/board.py archive`.
+2.  **Action**: If yes, run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py archive`.
 3.  **Result**: Completed stories are moved to `docs/product/archive/archive_YYYYMM.md`.
 
 ## 🎬 Phase 3.7: Deploy & Verify (If Applicable)

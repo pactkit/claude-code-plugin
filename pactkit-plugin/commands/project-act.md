@@ -55,8 +55,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🎬 Phase 4: Sync & Document
 1.  **Hygiene**: Delete temp files.
 2.  **Update Reality**:
-    - Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize`
-    - Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
+    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
 3.  **Update Board (CRITICAL)**:
     - Mark the tasks in `docs/product/sprint_board.md` as `[x]`.
     - Use `update_task` or manual edit.

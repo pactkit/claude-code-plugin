@@ -169,12 +169,20 @@ Format: `type(scope): description`
 - **Trigger**: If running Plan (store decisions), Act (load context), or Done (record lessons)
 - **Entity naming**: Use `{STORY_ID}` (e.g., "STORY-037") as the entity name, `entityType: "story"`
 
+### Draw.io MCP (`mcp__drawio__*`)
+- **Purpose**: Open generated diagrams directly in Draw.io editor for instant visual verification and interactive editing
+- **When to use**: If `mcp__drawio__open_drawio_xml` tool is available in the current runtime
+- **Tools**: `open_drawio_xml`, `open_drawio_csv`, `open_drawio_mermaid`
+- **Trigger**: After generating a `.drawio` XML file or when visualizing existing `.mmd` Mermaid files in Draw.io
+
 ## Usage by PDCA Phase
 
 | Phase | MCP Server | Condition |
 |-------|-----------|-----------|
 | **Plan** | Memory | If `mcp__memory__*` tools are available |
+| **Plan** | Draw.io MCP | If `mcp__drawio__*` tools are available (diagram generation) |
 | **Design** | shadcn | If `components.json` exists in project root |
+| **Design** | Draw.io MCP | If `mcp__drawio__*` tools are available (architecture visualization) |
 | **Act** | Context7 | If implementing with unfamiliar library API |
 | **Act** | Memory | If `mcp__memory__*` tools are available |
 | **Check** | Playwright MCP | If `mcp__playwright__*` tools are available |
