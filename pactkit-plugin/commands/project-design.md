@@ -21,7 +21,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🎬 Phase 1: PRD Generation
 > **Goal**: Create `docs/product/prd.md` — the single source of truth for the product.
 
-1.  **Scaffold**: Run `python3 ~/.claude/skills/pactkit-scaffold/scripts/scaffold.py create_prd "{ProductName}"`.
+1.  **Scaffold**: Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_prd "{ProductName}"`.
 2.  **Fill Sections** — Complete each section in the PRD:
 
 ### 1.1 Product Overview
@@ -90,7 +90,7 @@ Assign each Story to a horizon:
 
 ## 🎬 Phase 2: Architecture
 1.  **Update HLD**: Write the architecture Mermaid diagram from Section 1.4 into `docs/architecture/graphs/system_design.mmd`.
-2.  **Visualize** (if existing code): Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize`.
+2.  **Visualize** (if existing code): Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`.
 
 ## 🎬 Phase 3: Story Decomposition
 > **Goal**: Convert PRD Feature Breakdown into individual Specs.
@@ -98,7 +98,7 @@ Assign each Story to a horizon:
 1.  **Determine STORY IDs**: Scan `docs/specs/` to find the next available STORY-NNN number.
 2.  **Sort**: Order stories by horizon (Now → Next → Later), then by Priority Score (descending).
 3.  **For each Story**:
-    - Run `python3 ~/.claude/skills/pactkit-scaffold/scripts/scaffold.py create_spec "STORY-{NNN}" "{title}"`.
+    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_spec "STORY-{NNN}" "{title}"`.
     - Fill in the Spec:
       - `## Requirements` — using RFC 2119 keywords (MUST/SHOULD/MAY)
       - `## Acceptance Criteria` — Given/When/Then scenarios
@@ -107,7 +107,7 @@ Assign each Story to a horizon:
 
 ## 🎬 Phase 4: Board Setup
 1.  **Add Stories**: For each Story (ordered by horizon → priority):
-    - Run `python3 ~/.claude/skills/pactkit-board/scripts/board.py add_story "STORY-{NNN}" "{title}" "{task list}"`.
+    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py add_story "STORY-{NNN}" "{title}" "{task list}"`.
 2.  **Verify**: Read `docs/product/sprint_board.md` to confirm all stories are listed.
 
 ## 🎬 Phase 5: Handover

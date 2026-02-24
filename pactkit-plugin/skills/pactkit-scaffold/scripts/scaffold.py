@@ -103,7 +103,7 @@ def create_skill(name, desc, base_dir=None):
         '',
         '### [command_name] -- [Brief description]',
         '```',
-        f'python3 scripts/{clean}.py [subcommand] [args]',
+        f'python3 ~/.claude/skills/{name}/scripts/{clean}.py [subcommand] [args]',
         '```',
         '',
         '## Usage Scenarios',

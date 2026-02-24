@@ -7,6 +7,8 @@ description: "File scaffolding: create Spec, test files, E2E tests, Git branches
 
 Project file scaffolding tool for quickly creating standardized project files.
 
+> **Script location**: Use the base directory from the skill invocation header to resolve script paths. Classic deployment: `${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py`
+
 ## Prerequisites
 - `docs/specs/` directory must exist (required by `create_spec`)
 - `tests/unit/` and `tests/e2e/` directories must exist (required by test scaffolding)
@@ -16,7 +18,7 @@ Project file scaffolding tool for quickly creating standardized project files.
 
 ### create_spec -- Create a Spec file
 ```
-python3 scripts/scaffold.py create_spec ITEM-ID "Title"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_spec ITEM-ID "Title"
 ```
 - `ITEM-ID`: Work item identifier, e.g. `STORY-001`, `HOTFIX-001`, `BUG-001`
 - `Title`: Spec title
@@ -24,20 +26,20 @@ python3 scripts/scaffold.py create_spec ITEM-ID "Title"
 
 ### create_test_file -- Create a unit test
 ```
-python3 scripts/scaffold.py create_test_file src/module.py
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_test_file src/module.py
 ```
 - Automatically generates the corresponding test file based on the source file path
 - Output: `tests/unit/test_module.py`
 
 ### create_e2e_test -- Create an E2E test
 ```
-python3 scripts/scaffold.py create_e2e_test ITEM-ID "scenario_name"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_e2e_test ITEM-ID "scenario_name"
 ```
 - Output: `tests/e2e/test_{ITEM-ID}_{scenario}.py`
 
 ### git_start -- Create a Git branch
 ```
-python3 scripts/scaffold.py git_start ITEM-ID
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py git_start ITEM-ID
 ```
 - Branch prefix is inferred from the item type:
   - `STORY-*` → `feature/STORY-*`
@@ -46,11 +48,11 @@ python3 scripts/scaffold.py git_start ITEM-ID
 
 ### create_skill -- Create a Skill directory scaffold
 ```
-python3 scripts/scaffold.py create_skill skill-name "Description of the skill"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_skill skill-name "Description of the skill"
 ```
 - `skill-name`: Skill identifier (must start with lowercase letter: `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 - `Description`: Brief description for SKILL.md frontmatter
-- Output: `~/.claude/skills/{skill-name}/` with `SKILL.md`, `scripts/{clean_name}.py`, `references/.gitkeep`
+- Output: `${CLAUDE_PLUGIN_ROOT}/skills/{skill-name}/` with `SKILL.md`, `scripts/{clean_name}.py`, `references/.gitkeep`
 - Refuses to overwrite if the skill directory already exists
 
 ## Usage Scenarios

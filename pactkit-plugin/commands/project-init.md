@@ -25,14 +25,14 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
     - The detected language determines which `LANG_PROFILES` entry to use for test runner, cleanup, etc.
 
 ## 🎬 Phase 2: Architecture Governance
-1.  **Scaffold**: Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py init_arch`.
+1.  **Scaffold**: Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py init_arch`.
     - *Result*: Folders created. Placeholders (`system_design.mmd`) created.
 2.  **Ensure**: `mkdir -p docs/product docs/specs docs/test_cases tests/e2e/api tests/e2e/browser tests/unit`.
 
 ## 🎬 Phase 3: Discovery (Reverse Engineering)
-1.  **Scan Reality**: Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize`.
+1.  **Scan Reality**: Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`.
     - *Goal*: If this is an existing project, overwrite the empty `code_graph.mmd` with the REAL class structure immediately.
-2.  **Class Scan**: Run `python3 ~/.claude/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`.
+2.  **Class Scan**: Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`.
 3.  **Verify**: Read `docs/architecture/graphs/code_graph.mmd` and `class_graph.mmd`.
     - *Check*: Is it still "No code yet"? If files exist in src, this graph MUST contain classes.
 

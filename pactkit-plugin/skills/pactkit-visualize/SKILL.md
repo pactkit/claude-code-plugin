@@ -7,6 +7,8 @@ description: "Generate project code dependency graph (Mermaid), supporting file-
 
 Generate project code relationship graphs (Mermaid format), supporting three analysis modes.
 
+> **Script location**: Use the base directory from the skill invocation header to resolve script paths. Classic deployment: `${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py`
+
 ## Prerequisites
 - The project must have Python source files (`.py`) to generate meaningful graphs
 - The `docs/architecture/graphs/` directory is automatically created by `init_arch`
@@ -15,7 +17,7 @@ Generate project code relationship graphs (Mermaid format), supporting three ana
 
 ### visualize -- Generate code dependency graph
 ```
-python3 scripts/visualize.py visualize [--mode file|class|call] [--entry <func>] [--focus <module>]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize [--mode file|class|call] [--entry <func>] [--focus <module>]
 ```
 
 | Parameter | Description | Default |
@@ -28,14 +30,14 @@ python3 scripts/visualize.py visualize [--mode file|class|call] [--entry <func>]
 
 ### init_arch -- Initialize architecture directory
 ```
-python3 scripts/visualize.py init_arch
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py init_arch
 ```
 - Creates `docs/architecture/graphs/` and `docs/architecture/governance/`
 - Generates placeholder file `system_design.mmd`
 
 ### list_rules -- List governance rules
 ```
-python3 scripts/visualize.py list_rules
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py list_rules
 ```
 - Outputs the list of rule files under `docs/architecture/governance/`
 

@@ -51,17 +51,19 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus):
         rel_str = str(f.relative_to(root))
         nodes.append(f'    {nid}["{f.name}"]')
         nodes.append(f'    click {nid} href "{rel_str}"')
+    seen_edges = set()
     for p in all_files:
         consumer_id = file_to_node[p]
         try:
             tree = ast.parse(p.read_text(encoding='utf-8'))
             for n in ast.walk(tree):
-                imported_module = None
+                imported_modules = []
                 if isinstance(n, ast.Import):
-                    for name in n.names: imported_module = name.name
+                    for alias in n.names:
+                        imported_modules.append(alias.name)
                 elif isinstance(n, ast.ImportFrom):
-                    if n.module: imported_module = n.module
-                if imported_module:
+                    if n.module: imported_modules.append(n.module)
+                for imported_module in imported_modules:
                     tf = module_index.get(imported_module)
                     if not tf:
                         parts = imported_module.split('.')
@@ -70,7 +72,11 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus):
                             if sub in module_index: tf = module_index[sub]; break
                     if tf and tf != p:
                         pid = file_to_node.get(tf)
-                        if pid: edges.append((consumer_id, pid))
+                        if pid:
+                            edge = (consumer_id, pid)
+                            if edge not in seen_edges:
+                                seen_edges.add(edge)
+                                edges.append(edge)
         except: pass
 
     final_lines = ['graph TD']
