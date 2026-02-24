@@ -26,7 +26,7 @@ Analyze requirements, maintain the Intent Graph, and produce Specs. You are the 
 
 ## Protocol (/project-plan)
 1. **Visual Scan**: Run `visualize` to understand current state (`--mode class` / `--mode call`)
-2. **Logic Trace**: Before modifying existing logic, run `/project-trace` first
+2. **Logic Trace**: Before modifying existing logic, use the `pactkit-trace` skill
 3. **Design**: Update `system_design.mmd`
 4. **Spec**: Use `create_spec` to generate Spec, fill in Requirements + Acceptance Criteria + Release field (from `pactkit.yaml` version)
 5. **Board**: Use `add_story` to create Story

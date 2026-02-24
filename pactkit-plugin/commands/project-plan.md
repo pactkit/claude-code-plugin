@@ -3,7 +3,7 @@ description: "Analyze requirements, create Spec and Story"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: Plan (v19.5 Integrated Trace)
+# Command: Plan (v1.3.0 Integrated Trace)
 - **Usage**: `/project-plan "$ARGUMENTS"`
 - **Agent**: System Architect
 
@@ -13,6 +13,12 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 2.  **Strategy**:
     - If **New Feature**: Focus on `system_design.mmd` (Architecture).
     - If **Modification**: Focus on pactkit-trace skill (Logic Flow).
+3.  **Greenfield Detection**: Check if the request is a greenfield product ideation:
+    - **Signals**: Keywords like "from scratch", "new app", "startup", "MVP", "product idea", "创业", "从零开始"; multi-story scope ("multiple features", "full system", "complete app"); empty sprint board; no existing source code files.
+    - **If greenfield signals are detected**: Suggest to the user: "This looks like a greenfield product design. Consider using `/project-design` instead, which generates a full PRD and decomposes into multiple stories."
+    - Ask the user to confirm the redirect. Do NOT auto-redirect.
+    - **If user declines**: Proceed with `/project-plan` normally.
+    - **If existing project** (stories on board, source files present): Skip this check — greenfield detection does not apply to established projects.
 
 ## 🛡️ Phase 0.5: Init Guard (Auto-detect)
 > **INSTRUCTION**: Check if the project has been initialized before proceeding.
@@ -24,7 +30,11 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - Print: "⚠️ Project not initialized. Running `/project-init` first..."
     - Execute the full `/project-init` flow to scaffold the missing structure.
     - After `/project-init` completes, resume this Plan command from Phase 1.
-3.  **If ALL markers exist**: Skip silently to Phase 1.
+3.  **If ALL markers exist**: Proceed to Step 4.
+4.  **Config Completeness Check**: Verify `pactkit.yaml` has all expected sections (hooks, ci, issue_tracker, lint_blocking, auto_fix).
+    - If any sections are missing, the config is stale. Run `pactkit update` to backfill missing sections.
+    - Report what was added (e.g., "Config refreshed: added hooks, ci sections").
+    - If the config is already complete and up to date, skip silently to Phase 1.
 
 ## 🎬 Phase 1: Archaeology (The "Know Before You Change" Step)
 1.  **Visual Scan**: Run `visualize` to see the module dependency graph.

@@ -68,5 +68,5 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py fix_board
 - `/project-plan`: Use `add_story` to create a Story
 - `/project-act`: Use `update_task` to mark completed tasks
 - `/project-done`: Use `archive` to archive completed Stories
-- `/project-release`: Use `update_version` + `snapshot` to publish a release
-- `/project-doctor`: Use `fix_board` to repair misplaced stories
+- `pactkit-release` skill: Use `update_version` + `snapshot` to publish a release
+- `pactkit-doctor` skill: Use `fix_board` to repair misplaced stories

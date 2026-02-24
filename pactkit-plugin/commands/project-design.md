@@ -3,7 +3,7 @@ description: "Product design for greenfield projects: PRD generation, story deco
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: Design (v22.0 Product Designer)
+# Command: Design (v1.3.0 Product Designer)
 - **Usage**: `/project-design "$ARGUMENTS"`
 - **Agent**: Product Designer
 

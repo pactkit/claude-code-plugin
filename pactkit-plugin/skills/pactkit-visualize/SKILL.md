@@ -53,5 +53,5 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py list
 ## Usage Scenarios
 - `/project-plan`: Run `visualize` to understand current project state before making design decisions
 - `/project-act`: Run `visualize --focus <module>` to understand dependencies of the modification target
-- `/project-doctor`: Run `visualize` to check whether architecture graphs can be generated correctly
-- `/project-trace`: Run `visualize --mode call --entry <func>` to trace call chains
+- `pactkit-doctor` skill: Run `visualize` to check whether architecture graphs can be generated correctly
+- `pactkit-trace` skill: Run `visualize --mode call --entry <func>` to trace call chains

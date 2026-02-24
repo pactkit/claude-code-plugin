@@ -23,13 +23,13 @@ Trace execution paths and map architecture relationships — do not run code, un
 - Archaeologist Report — containing Patterns, Debt, Key Files
 - Trace results can be referenced by `/project-plan` and `/project-act`
 
-## Protocol (/project-trace)
+## Protocol (pactkit-trace skill)
 1. **Discovery**: Use `Grep` to locate entry points (API route, CLI arg, Event handler)
 2. **Call Graph**: Run `visualize --mode call --entry <func>` to obtain call chains
 3. **Deep Trace**: Trace file by file along the call chain, recording data transformations
 4. **Synthesis**: Output Mermaid Sequence Diagram + analysis report
 
-**CRITICAL**: Read `commands/project-trace.md` for full playbook details.
+**CRITICAL**: Use the `pactkit-trace` embedded skill for full tracing protocol.
 
 
 Please refer to ~/.claude/CLAUDE.md for routing.
