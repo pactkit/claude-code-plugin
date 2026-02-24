@@ -51,6 +51,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       - **STOP** and report to the user: which test failed, what it appears to test, and which of your changes likely caused the failure.
       - Suggest options: (a) you revert your change that caused the regression, or (b) the user reviews and provides guidance.
       - You MUST NOT assume you understand the design intent behind pre-existing tests — the project may have adopted PDCA mid-way and there is no Spec for older features.
+4.  **Lint Check (Conditional)**: IF a CI config exists (`.github/workflows/*.yml` or similar) or `lint_command` is set in `LANG_PROFILES`:
+    - Run the `lint_command` for the detected stack (e.g., `ruff check src/ tests/` for Python).
+    - If lint fails, fix the lint errors in your own new/modified files only, then re-run.
+    - Do NOT modify pre-existing files to fix lint unless the lint error is in a file you changed in this Story.
 
 ## 🎬 Phase 4: Sync & Document
 1.  **Hygiene**: Delete temp files.

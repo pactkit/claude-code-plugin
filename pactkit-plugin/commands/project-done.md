@@ -23,6 +23,11 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  **Update Reality**:
     - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
     - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+3.  **HLD Consistency Check**: Read `docs/architecture/graphs/system_design.mmd` and verify component counts match reality:
+    - Compare any numeric labels in subgraphs (e.g., "8 commands", "9 skills") against the actual component counts from `config.py` VALID_* registries or the project source.
+    - If a mismatch is found, **warn** the user: "⚠️ system_design.mmd is stale: says {old} but actual is {new}. Update the HLD."
+    - If the user agrees, update the mismatch in `system_design.mmd`.
+    - If `system_design.mmd` does not exist, skip silently.
 
 ## 🎬 Phase 2.5: Regression Gate (MANDATORY)
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.
@@ -52,12 +57,22 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 - **< 50%**: BLOCK — require user confirmation: "Changed file `{file}` has only {N}% coverage. Proceed anyway?"
 - Include coverage data in the output so the user can evaluate test quality.
 
+### Step 2.7: CI Lint Gate (Conditional)
+> **Purpose**: Catch lint errors that CI will reject, before committing.
+
+1. **Detect CI config**: Check if `.github/workflows/*.yml`, `.gitlab-ci.yml`, or a lint-related config (e.g., `[tool.ruff]` in `pyproject.toml`, `.eslintrc*`, `.golangci.yml`) exists.
+2. **If CI config exists**: Run the `lint_command` from `LANG_PROFILES` for the detected stack.
+   - Example (Python): `ruff check src/ tests/`
+   - Example (Node): `npx eslint .`
+3. **Gate**: If lint fails, **STOP immediately**. Report the lint errors and do NOT proceed to commit.
+4. **Skip**: If no CI config and no lint tool detected, skip silently: "No CI lint config detected — skipping lint gate."
+
 ### Step 3: Gate
 - If any test fails, **STOP immediately**. Do NOT proceed to commit.
 - **Do NOT attempt to fix** pre-existing test failures or modify code you do not understand.
 - The agent MUST NOT assume it understands pre-existing test intent — the project may have adopted PDCA mid-way and there is no Spec for older features.
 - Report the failure to the user with: which test failed, what it appears to test, and which change likely caused it.
-- Only continue if ALL tests are GREEN.
+- Only continue if ALL tests and lint checks are GREEN.
 
 ## 🎬 Phase 3: Hygiene Check & Fix
 1.  **Verify**: Are tasks for this Story marked `[x]`?
@@ -69,7 +84,12 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
     - Date: today's date
     - Summary: one sentence describing the key insight, pattern, or pitfall from this Story
     - This is NOT conditional on Memory MCP — always append to lessons.md
-4.  **Memory MCP (Conditional)**: IF `mcp__memory__add_observations` tool is available, record lessons learned:
+4.  **Invariants Refresh (MANDATORY)**: Update the Invariants section in `docs/architecture/governance/rules.md`:
+    - Read the current `rules.md` file.
+    - Update the test count to match the actual number from the most recent test run (e.g., "All {N}+ tests must pass").
+    - Preserve the Architecture Decisions (ADR) table — only update the Invariants section.
+    - If `rules.md` does not exist, skip silently.
+5.  **Memory MCP (Conditional)**: IF `mcp__memory__add_observations` tool is available, record lessons learned:
     - Use `mcp__memory__add_observations` on the `{STORY_ID}` entity with: implementation patterns used, pitfalls encountered, key files modified, and any non-obvious decisions made during implementation
     - This builds a cumulative project knowledge base that persists across sessions
 
@@ -90,7 +110,8 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 > If this Story involves a version bump, invoke the release workflow:
 1.  **Detect**: Check if `pyproject.toml` version was changed in this Story.
 2.  **If yes**: Run `update_version`, `snapshot`, and `archive` via pactkit-board skill. Tag with `git tag`.
-3.  **If no**: Skip to Phase 4.
+3.  **Verify Snapshots**: After the snapshot step, check that `docs/architecture/snapshots/{version}_*.mmd` files exist. If missing, report: "❌ Snapshot verification failed: expected files in snapshots/ for {version}."
+4.  **If no version change**: Skip to Phase 4.
 
 ## 🎬 Phase 4: Git Commit
 1.  **Format**: `feat(scope): <title from spec>`
