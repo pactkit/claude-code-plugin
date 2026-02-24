@@ -2,7 +2,7 @@
 name: repo-maintainer
 description: Release engineering and housekeeping.
 tools: Read, Write, Edit, Bash, Glob
-model: sonnet
+model: inherit
 skills: [pactkit-board, pactkit-release]
 ---
 

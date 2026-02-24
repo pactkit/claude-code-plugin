@@ -2,7 +2,8 @@
 name: security-auditor
 description: Security specialist (OWASP).
 tools: Read, Bash, Grep
-model: sonnet
+model: inherit
+permissionMode: plan
 disallowedTools: [Write, Edit]
 ---
 

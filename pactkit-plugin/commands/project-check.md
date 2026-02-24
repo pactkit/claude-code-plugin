@@ -62,6 +62,18 @@ For each finding, assign a severity (P0-P3). Flag issues that may cause silent f
     * *Constraint*: Do not write Python code yet.
 5.  **Coverage Report**: Compare Scenarios in Spec vs Test Cases. Report any uncovered Scenario.
 
+## Phase 3.5: Test Quality Gate
+> **Purpose**: Prevent tautological or low-value tests from passing the regression gate unchallenged.
+
+1.  **Identify Story Tests**: Find all test files created or modified for the current Story (use `git diff --name-only` or match `test_{STORY_ID}` / `test_story*` patterns).
+2.  **Read & Audit**: Read each test file and check for these anti-patterns:
+    - **Tautological assertions** (P1): `assert True`, `assert 1 == 1`, or any assertion that can never fail regardless of implementation correctness.
+    - **Missing assertions** (P1): Test functions that execute code but contain no `assert` statement — they pass silently without verifying anything.
+    - **Over-mocking** (P2): Test mocks or stubs every dependency so that no real logic is exercised; the test only verifies the mock wiring, not actual behavior.
+    - **Happy-path only** (P2): All test methods only cover the success case with no error inputs, boundary conditions, or edge cases tested.
+3.  **Report**: For each finding, assign the severity above and include it in the Phase 5 verdict.
+4.  **Gate**: If any P1 test quality issue is found, flag it as a required fix (same as a code quality P1).
+
 ## Phase 4: Layered Execution
 Choose the strategy identified in Phase 0:
 
@@ -102,8 +114,9 @@ Choose the strategy identified in Phase 0:
 ### Scan Summary
 | Category | P0 | P1 | P2 | P3 |
 |----------|----|----|----|----|
-| Security |    |    |    |    |
-| Quality  |    |    |    |    |
+| Security     |    |    |    |    |
+| Quality      |    |    |    |    |
+| Test Quality |    |    |    |    |
 
 ### Issues (if any)
 - **[P0] [file:line]** Description

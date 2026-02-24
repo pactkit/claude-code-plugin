@@ -2,7 +2,7 @@
 name: senior-developer
 description: Implementation specialist focused on TDD.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 skills: [pactkit-visualize, pactkit-scaffold, pactkit-trace]
 ---
 

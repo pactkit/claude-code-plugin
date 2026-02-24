@@ -57,15 +57,20 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 - **< 50%**: BLOCK — require user confirmation: "Changed file `{file}` has only {N}% coverage. Proceed anyway?"
 - Include coverage data in the output so the user can evaluate test quality.
 
-### Step 2.7: CI Lint Gate (Conditional)
-> **Purpose**: Catch lint errors that CI will reject, before committing.
+### Step 2.7: Smart Lint Gate (STORY-030)
+> **Purpose**: Stack-aware lint check with configurable behavior.
 
-1. **Detect CI config**: Check if `.github/workflows/*.yml`, `.gitlab-ci.yml`, or a lint-related config (e.g., `[tool.ruff]` in `pyproject.toml`, `.eslintrc*`, `.golangci.yml`) exists.
-2. **If CI config exists**: Run the `lint_command` from `LANG_PROFILES` for the detected stack.
+1. **Detect Stack**: Read `lint_command` from `LANG_PROFILES` for the detected project stack.
    - Example (Python): `ruff check src/ tests/`
    - Example (Node): `npx eslint .`
-3. **Gate**: If lint fails, **STOP immediately**. Report the lint errors and do NOT proceed to commit.
-4. **Skip**: If no CI config and no lint tool detected, skip silently: "No CI lint config detected — skipping lint gate."
+2. **Auto-Fix (Conditional)**: Read `auto_fix` from `pactkit.yaml`.
+   - If `auto_fix: true`: Run lint with fix flag first (e.g., `ruff check --fix src/ tests/`), then re-run lint to verify.
+   - If `auto_fix: false` (default): Skip auto-fix, run lint in check-only mode.
+3. **Run Lint**: Execute the lint command for the detected stack.
+4. **Blocking Behavior**: Read `lint_blocking` from `pactkit.yaml`.
+   - If `lint_blocking: true`: Lint failures **STOP** the commit. Report errors and do NOT proceed.
+   - If `lint_blocking: false` (default): Lint failures are reported as **warnings**. Print findings but proceed with commit.
+5. **Skip**: If no lint command found for the stack, skip silently: "No lint command configured — skipping lint gate."
 
 ### Step 3: Gate
 - If any test fails, **STOP immediately**. Do NOT proceed to commit.
@@ -97,6 +102,15 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 1.  **Check**: Are all tasks for the current Story marked `[x]`?
 2.  **Action**: If yes, run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py archive`.
 3.  **Result**: Completed stories are moved to `docs/product/archive/archive_YYYYMM.md`.
+
+## 🎬 Phase 3.6: Issue Tracker Closure (Conditional)
+> **Purpose**: Close linked external issues when the Story is done.
+1.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
+2.  **If `provider: github`**:
+    - Parse the Sprint Board entry for a linked issue URL (e.g., `[#123](https://github.com/...)`)
+    - If found: run `gh issue close <number> --comment "Completed in $(git rev-parse --short HEAD)"`
+    - If `gh` CLI unavailable or closure fails: print warning, continue
+3.  **If `provider: none` or section missing**: Skip silently.
 
 ## 🎬 Phase 3.7: Deploy & Verify (If Applicable)
 > **Purpose**: Ensure the committed code works correctly in deployed form.

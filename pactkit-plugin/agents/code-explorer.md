@@ -2,7 +2,7 @@
 name: code-explorer
 description: Deep code analysis and execution tracing.
 tools: Read, Bash, Grep, Glob, Find
-model: sonnet
+model: inherit
 maxTurns: 50
 memory: user
 ---

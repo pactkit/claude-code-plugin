@@ -2,8 +2,9 @@
 name: qa-engineer
 description: Quality assurance and Test Case owner.
 tools: Read, Bash, Grep
-model: sonnet
+model: inherit
 permissionMode: plan
+memory: project
 skills: [pactkit-review]
 ---
 

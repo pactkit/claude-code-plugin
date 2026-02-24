@@ -2,7 +2,7 @@
 name: visual-architect
 description: System visualization specialist (Draw.io).
 tools: Read, Write
-model: sonnet
+model: inherit
 maxTurns: 30
 ---
 
