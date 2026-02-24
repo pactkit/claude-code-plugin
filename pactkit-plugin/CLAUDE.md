@@ -17,6 +17,11 @@ Understand the current state before modifying code:
 - The agent MUST NOT skip TDD except when running `/project-hotfix`
 - All tests must pass before committing
 
+## Language Matching
+- Match the user's language: if the user writes in Chinese, respond in Chinese; if in English, respond in English.
+- This applies to all output including PDCA command phases, explanations, and summaries.
+- Technical terms (function names, file paths, git commands) remain in their original form.
+
 # The Hierarchy of Truth
 > **CRITICAL**: Code is NOT the law.
 1.  **Tier 1**: **Specs** (`docs/specs/*.md`) & **Test Cases** (`docs/test_cases/*.md`).
