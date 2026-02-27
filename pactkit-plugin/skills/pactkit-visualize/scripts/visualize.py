@@ -105,7 +105,7 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=
         for line in nodes:
             if any(rid in line for rid in relevant_ids): final_lines.append(line)
         final_lines.extend(relevant_edges)
-        dest = root / 'docs/architecture/graphs/focus_graph.mmd'
+        dest = root / 'docs/architecture/graphs/focus_file_graph.mmd'
     else:
         # Apply depth limiting via BFS if depth > 0
         if depth > 0:
@@ -209,7 +209,7 @@ def _build_class_graph(root, all_files, focus):
             lines.append(f'    {b} <|-- {cname}')
 
     dest = root / 'docs/architecture/graphs/class_graph.mmd'
-    if focus: dest = root / 'docs/architecture/graphs/focus_graph.mmd'
+    if focus: dest = root / 'docs/architecture/graphs/focus_class_graph.mmd'
     return dest, nl().join(lines)
 
 # --- MODE: CALL (function-level call graph) ---
@@ -297,7 +297,7 @@ def _build_call_graph(root, all_files, focus, entry):
         for src, dst in rel_edges: lines.append(f'    {safe(src)} --> {safe(dst)}')
 
     dest = root / 'docs/architecture/graphs/call_graph.mmd'
-    if focus: dest = root / 'docs/architecture/graphs/focus_graph.mmd'
+    if focus: dest = root / 'docs/architecture/graphs/focus_call_graph.mmd'
     return dest, nl().join(lines)
 
 _BUILTIN_CALLEES = {
@@ -340,15 +340,114 @@ def _resolve_callee(callee, all_func_names):
         if fn.endswith(f'.{callee}') or fn == callee: return fn
     return None
 
+# --- MODE: REVERSE CALLER BFS (STORY-053) ---
+def _scan_call_edges(root, all_files):
+    """Shared helper: build func_registry and call_edges from source. Used by forward and reverse BFS."""
+    func_registry = {}  # {qualified_name: stem}
+    call_edges = {}  # {caller: [callees]}
+    for p in all_files:
+        try:
+            tree = ast.parse(p.read_text(encoding='utf-8'))
+            rel = p.stem
+            for node in ast.iter_child_nodes(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    qname = node.name
+                    func_registry[qname] = rel
+                    call_edges[qname] = _extract_calls(node, current_class=None)
+                elif isinstance(node, ast.ClassDef):
+                    for item in node.body:
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            qname = f'{node.name}.{item.name}'
+                            func_registry[qname] = rel
+                            call_edges[qname] = _extract_calls(item, current_class=node.name)
+        except: pass
+    return func_registry, call_edges
+
+
+def _find_entry_func(entry, all_func_names):
+    """Find the entry function by exact match, suffix match, or substring match."""
+    if not entry: return None
+    for fn in all_func_names:
+        if fn == entry or fn.endswith(f'.{entry}'): return fn
+    for fn in all_func_names:
+        if entry in fn: return fn
+    return None
+
+
+def _build_reverse_graph(func_registry, call_edges, entry):
+    """BFS backwards through caller graph from entry. Returns (visited_funcs, reverse_edges)."""
+    all_func_names = set(func_registry.keys())
+    # Build reverse map: {callee: [callers]}
+    reverse_map = {}
+    for caller, callees in call_edges.items():
+        for callee in callees:
+            resolved = _resolve_callee(callee, all_func_names)
+            if resolved:
+                reverse_map.setdefault(resolved, []).append(caller)
+
+    start = _find_entry_func(entry, all_func_names)
+    if not start: return set(), []
+
+    visited = set()
+    queue = [start]
+    reverse_edges = []
+    while queue:
+        current = queue.pop(0)
+        if current in visited: continue
+        visited.add(current)
+        for caller in reverse_map.get(current, []):
+            reverse_edges.append((caller, current))
+            if caller not in visited: queue.append(caller)
+    return visited, reverse_edges
+
+
+# --- impact() subcommand (STORY-053) ---
+def impact(target='.', entry=None):
+    """Find test files impacted by a changed function (reverse BFS + test mapping).
+    Returns a space-separated list of test file paths, or empty string if none found.
+    """
+    if not entry: return ''
+    root = Path(target).resolve()
+    all_files, module_index, file_to_node = _scan_files(root)
+    func_registry, call_edges = _scan_call_edges(root, all_files)
+
+    visited, _ = _build_reverse_graph(func_registry, call_edges, entry)
+    if not visited: return ''
+
+    test_files = set()
+    for func_name in visited:
+        stem = func_registry.get(func_name)
+        if stem:
+            # Python pattern: src/pactkit/config.py → tests/unit/test_config.py
+            test_path = root / 'tests' / 'unit' / f'test_{stem}.py'
+            if test_path.exists():
+                test_files.add(str(test_path.relative_to(root)))
+    return ' '.join(sorted(test_files))
+
+
 # --- MAIN VISUALIZE (v1.3.0 Multi-Mode) ---
-def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0):
+def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False):
     root = Path(target).resolve()
     all_files, module_index, file_to_node = _scan_files(root)
 
     if mode == 'class':
         dest, content = _build_class_graph(root, all_files, focus)
     elif mode == 'call':
-        dest, content = _build_call_graph(root, all_files, focus, entry)
+        if entry and reverse:
+            # Reverse BFS: find all callers of the entry function
+            func_registry, call_edges = _scan_call_edges(root, all_files)
+            visited, reverse_edges = _build_reverse_graph(func_registry, call_edges, entry)
+            lines = ['graph TD']
+            safe = lambda s: s.replace('.', '_')
+            for fn in visited:
+                lines.append(f'    {safe(fn)}["{fn}"]')
+            for src, dst in reverse_edges:
+                lines.append(f'    {safe(src)} --> {safe(dst)}')
+            dest = root / 'docs/architecture/graphs/call_graph.mmd'
+            if focus: dest = root / 'docs/architecture/graphs/focus_call_graph.mmd'
+            content = nl().join(lines)
+        else:
+            dest, content = _build_call_graph(root, all_files, focus, entry)
     else:
         dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes)
         if dest is None: return content  # error message
@@ -371,8 +470,12 @@ if __name__ == '__main__':
     p_viz.add_argument('--entry')
     p_viz.add_argument('--depth', type=int, default=0, help='Limit graph traversal to N levels (0=unlimited)')
     p_viz.add_argument('--max-nodes', type=int, default=0, help='Truncate graph to N nodes (0=unlimited)')
+    p_viz.add_argument('--reverse', action='store_true', default=False, help='Reverse BFS: find callers of entry function (STORY-053)')
+    p_impact = sub.add_parser('impact', help='Find test files impacted by a changed function (STORY-053)')
+    p_impact.add_argument('--entry', required=True, help='Changed function name')
 
     a = parser.parse_args()
     if a.cmd == 'init_arch': print(init_architecture())
-    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes))
+    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse))
+    elif a.cmd == 'impact': print(impact('.', a.entry))
     elif a.cmd == 'list_rules': print(list_rules())

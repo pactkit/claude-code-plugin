@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v23.0 Modular)
+# PactKit Global Constitution (v1.5.0 Modular)
 
 # Core Protocol
 
@@ -64,7 +64,7 @@ Understand the current state before modifying code:
 
 # Command Reference (Routing Table)
 
-## Commands (8 user-facing entry points)
+## Commands (11 user-facing entry points)
 
 ### Init (`/project-init`)
 - **Role**: System Architect
@@ -73,6 +73,10 @@ Understand the current state before modifying code:
 ### Plan (`/project-plan`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-plan.md`
+
+### Clarify (`/project-clarify`)
+- **Role**: System Architect
+- **Playbook**: `commands/project-clarify.md`
 
 ### Act (`/project-act`)
 - **Role**: Senior Developer
@@ -86,6 +90,16 @@ Understand the current state before modifying code:
 ### Done (`/project-done`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-done.md`
+
+### Release (`/project-release`)
+- **Role**: Repo Maintainer
+- **Playbook**: `commands/project-release.md`
+- **Goal**: Version release: snapshot, archive, and Git tag.
+
+### PR (`/project-pr`)
+- **Role**: Repo Maintainer
+- **Playbook**: `commands/project-pr.md`
+- **Goal**: Push branch and create pull request via gh CLI.
 
 ### Sprint (`/project-sprint`)
 - **Role**: Team Lead (Orchestrator)
@@ -111,7 +125,8 @@ Understand the current state before modifying code:
 | `pactkit-status` | Init Phase 6, cold-start | Project state overview |
 | `pactkit-doctor` | Init auto-check | Diagnose project health |
 | `pactkit-review` | Check Phase 4 (PR variant) | PR Code Review |
-| `pactkit-release` | Done Phase 3.8 (version release) | Version release: snapshot, archive, Tag |
+| `pactkit-release` | Release Phase 1 (snapshot/archive) | Version release: snapshot, archive, Tag |
+| `pactkit-analyze` | Act Phase 0.6 | Cross-artifact consistency check: Spec ↔ Board ↔ Test Cases |
 
 # Workflow Conventions
 

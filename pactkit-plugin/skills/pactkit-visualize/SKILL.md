@@ -48,7 +48,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py list
 | `--mode file` | `docs/architecture/graphs/code_graph.mmd` | graph TD |
 | `--mode class` | `docs/architecture/graphs/class_graph.mmd` | classDiagram |
 | `--mode call` | `docs/architecture/graphs/call_graph.mmd` | graph TD |
-| `--focus` | `docs/architecture/graphs/focus_graph.mmd` | graph TD |
+| `--focus` (file) | `docs/architecture/graphs/focus_file_graph.mmd` | graph TD |
+| `--focus` (class) | `docs/architecture/graphs/focus_class_graph.mmd` | classDiagram |
+| `--focus` (call) | `docs/architecture/graphs/focus_call_graph.mmd` | graph TD |
 
 ## Usage Scenarios
 - `/project-plan`: Run `visualize` to understand current project state before making design decisions

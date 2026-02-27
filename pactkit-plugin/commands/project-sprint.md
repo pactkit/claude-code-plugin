@@ -39,6 +39,17 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - Task: "Check-Security — OWASP Audit" (blockedBy: Build)
     - Task: "Close — Archive & Commit" (blockedBy: Check-QA, Check-Security)
 
+## 🎬 Phase 1.5: Worktree Pre-check
+> **ISOLATION**: All subagents run in isolated git worktrees by default.
+> Each worktree is an independent copy of the repo with its own working tree and index.
+> This prevents write conflicts between parallel agents and keeps the user's main workspace clean.
+
+1.  **Check Worktree Support**: Run `git worktree list` to verify the environment supports worktrees.
+    - If the command succeeds, proceed with `isolation="worktree"` on all Task calls.
+    - If it fails (e.g., shallow clone, bare repo, or CI environment without full git), fall back to shared workspace mode (no `isolation` parameter) and print a warning:
+      > "WARNING: git worktree not supported in this environment. Falling back to shared workspace mode. Parallel agents may encounter write conflicts."
+2.  **Note on auto-cleanup**: When a subagent makes no file changes, its worktree is automatically cleaned up by Claude Code. The Lead should NOT attempt to merge from a worktree that was auto-cleaned (the Task result will indicate no worktree path was returned).
+
 ## 🎬 Phase 2: Slim PDCA Execution
 
 ### Stage A: Build (Plan + Act merged)
@@ -46,7 +57,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > Keeping Plan+Act in one agent eliminates 1 context fork and 1 round-trip,
 > while preserving continuity — the builder validates spec feasibility during implementation.
 
-1.  **Launch**: `Task(subagent_type="system-architect")`
+1.  **Launch**: `Task(subagent_type="system-architect", isolation="worktree")`
     - **prompt**:
       ```
       You are the Builder (System Architect + Senior Developer).
@@ -62,13 +73,17 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       ```
 2.  **Wait**: For subagent completion.
 3.  **Verify**: Confirm `docs/specs/{STORY_ID}.md` was created (Glob, not Read).
-4.  **On Failure**: STOP orchestration. Report failure to user. Do NOT proceed.
-5.  **Update**: `TaskUpdate(build_task, status=completed)`.
+4.  **Merge Worktree Changes**: If the Task result includes a worktree branch name, merge the build artifacts back to the current working branch:
+    - Run `git merge <worktree-branch> --no-ff -m "merge: Stage A build for {STORY_ID}"`
+    - If a merge conflict occurs, STOP and report the conflict to the user (see Error Handling).
+5.  **On Failure**: STOP orchestration. Report failure to user. Do NOT proceed.
+6.  **Update**: `TaskUpdate(build_task, status=completed)`.
 
 ### Stage B: Check (PARALLEL)
 > **CRITICAL**: Launch BOTH subagents in a SINGLE message (parallel tool calls).
+> Each subagent runs in its own isolated worktree — zero interference between QA and Security.
 
-1.  **Launch QA**: `Task(subagent_type="qa-engineer", model="sonnet")`
+1.  **Launch QA**: `Task(subagent_type="qa-engineer", model="sonnet", isolation="worktree")`
     - **prompt**:
       ```
       You are the QA Engineer.
@@ -79,7 +94,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       When done, write a report to `docs/product/reports/{STORY_ID}-qa.md` and
       report a single line: "QA PASS" or "QA FAIL: <reason>"
       ```
-2.  **Launch Security** (same message): `Task(subagent_type="security-auditor", model="sonnet")`
+2.  **Launch Security** (same message): `Task(subagent_type="security-auditor", model="sonnet", isolation="worktree")`
     - **prompt**:
       ```
       You are the Security Auditor.
@@ -91,11 +106,14 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       report a single line: "SECURITY PASS" or "SECURITY FAIL: <reason>"
       ```
 3.  **Wait**: For BOTH subagents to complete.
-4.  **On Failure**: If either reports FAIL, STOP. Report to user.
-5.  **Update**: `TaskUpdate(check tasks, status=completed)`.
+4.  **Collect Reports**: For each subagent that returned a worktree path, copy the report files from the worktree back to the main workspace:
+    - `cp <worktree-path>/docs/product/reports/{STORY_ID}-qa.md docs/product/reports/`
+    - `cp <worktree-path>/docs/product/reports/{STORY_ID}-security.md docs/product/reports/`
+5.  **On Failure**: If either reports FAIL, STOP. Report to user.
+6.  **Update**: `TaskUpdate(check tasks, status=completed)`.
 
 ### Stage C: Close
-1.  **Launch**: `Task(subagent_type="repo-maintainer", model="sonnet")`
+1.  **Launch**: `Task(subagent_type="repo-maintainer", model="sonnet", isolation="worktree")`
     - **prompt**:
       ```
       You are the Repo Maintainer.
@@ -106,7 +124,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       Report a single line: "DONE PASS" or "DONE FAIL: <reason>"
       ```
 2.  **Wait**: For subagent completion.
-3.  **Update**: `TaskUpdate(close_task, status=completed)`.
+3.  **Merge Worktree Changes**: If the Task result includes a worktree branch, merge the commit and archive changes back:
+    - Run `git merge <worktree-branch> --no-ff -m "merge: Stage C close for {STORY_ID}"`
+    - If a merge conflict occurs, STOP and report (see Error Handling).
+4.  **Update**: `TaskUpdate(close_task, status=completed)`.
 
 ## 🎬 Phase 3: Cleanup
 1.  **Shutdown**: Send `SendMessage(type="shutdown_request")` to all teammates.
@@ -121,6 +142,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - If ANY stage fails, **STOP immediately**. Do NOT proceed to the next stage.
 - Report the failure phase, subagent output, and suggest manual intervention.
 - Always run `TeamDelete` in cleanup, even on failure.
+- **Merge conflict**: If `git merge` of a worktree branch fails with a conflict, STOP the sprint. Report the conflicting files and suggest: `git merge --abort` to undo, then resolve manually.
+- **Worktree residue**: If the sprint is interrupted, remind the user to clean up orphaned worktrees: `git worktree list` to inspect, `git worktree remove <path>` to clean up.
 
 ## 📋 Subagent Type Reference
 | Phase | subagent_type | Model | Playbook |

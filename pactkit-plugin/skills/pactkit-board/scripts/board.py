@@ -6,6 +6,10 @@ def nl(): return chr(10)
 # Shared pattern for all recognized work item prefixes
 ITEM_ID_RE = r'(?:STORY|HOTFIX|BUG)-\d+'
 
+# Flexible story title pattern: matches both ### [ID] Title and ### ID: Title and ### ID Title
+# Group 1: story ID, Group 2: title text
+_TITLE_RE = rf'^### \[?({ITEM_ID_RE})\]?:?\s*(.*)'
+
 # Section markers
 _BACKLOG = '## 📋 Backlog'
 _IN_PROGRESS = '## 🔄 In Progress'
@@ -32,9 +36,9 @@ def add_story(sid, title, tasks):
 
 
 def _parse_story_blocks(content):
-    """Extract all ### [ID] blocks with their full text."""
+    """Extract all ### [ID] or ### ID: blocks with their full text."""
     blocks = []
-    story_pat = rf'^### \[({ITEM_ID_RE})\].*'
+    story_pat = _TITLE_RE
     section_pat = r'^## '
     matches = list(re.finditer(story_pat, content, re.MULTILINE))
     # Find all section header positions to use as boundaries
@@ -132,7 +136,7 @@ def update_task(sid, tasks_list):
         return '❌ No Board'
     content = p.read_text(encoding='utf-8')
     # Locate the story block
-    story_pat = rf'(### \[{re.escape(sid)}\].*?)(?=\n### |\Z)'
+    story_pat = rf'(### \[?{re.escape(sid)}\]?:?.*?)(?=\n### |\Z)'
     story_match = re.search(story_pat, content, re.DOTALL)
     if not story_match:
         return f'❌ Story {sid} not found'
@@ -179,7 +183,7 @@ def list_stories():
     if not p.exists():
         return '❌ No Board'
     content = p.read_text(encoding='utf-8')
-    headers = list(re.finditer(rf'^### \[({ITEM_ID_RE})\] (.+)$', content, re.MULTILINE))
+    headers = list(re.finditer(_TITLE_RE, content, re.MULTILINE))
     if not headers:
         return 'No stories on board.'
     lines = []
@@ -209,7 +213,7 @@ def archive_stories():
     archive_dir = Path.cwd() / 'docs/product/archive'
     if not board_path.exists(): return '❌ No Board'
     content = board_path.read_text(encoding='utf-8')
-    parts = re.split(r'(?=^### \[(?:STORY|HOTFIX|BUG)-)', content, flags=re.MULTILINE)
+    parts = re.split(r'(?=^### \[?(?:STORY|HOTFIX|BUG)-)', content, flags=re.MULTILINE)
     active_parts = [parts[0]]
     archived_parts = []
     for part in parts[1:]:

@@ -20,9 +20,13 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 1.  **Action**: Remove language-specific temp artifacts (see `LANG_PROFILES` cleanup list; default for Python):
     - `rm -rf __pycache__ .pytest_cache`
     - `rm -f .DS_Store *.tmp *.log`
-2.  **Update Reality**:
-    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
-    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+2.  **Update Reality (Lazy Visualize)**:
+    - Check if `docs/architecture/graphs/code_graph.mmd` exists AND `git diff --name-only` includes any files in `LANG_PROFILES[stack].source_dirs`.
+    - **If source files changed OR graph missing**: Run all three visualize commands:
+        - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
+        - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+        - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode call`
+    - **If no source files changed AND graph exists**: Skip with log: `"Graph up-to-date — no source changes"`
 3.  **HLD Consistency Check**: Read `docs/architecture/graphs/system_design.mmd` and verify component counts match reality:
     - Compare any numeric labels in subgraphs (e.g., "8 commands", "9 skills") against the actual component counts from `config.py` VALID_* registries or the project source.
     - If a mismatch is found, **warn** the user: "⚠️ system_design.mmd is stale: says {old} but actual is {new}. Update the HLD."
@@ -36,18 +40,76 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 - Run `git diff --name-only HEAD~1` (or vs. branch base) to list all changed files.
 - Check if `docs/architecture/graphs/code_graph.mmd` exists.
 
+### Step 1.3: Doc-Only Shortcut
+> **PURPOSE**: If no source files were changed, skip or minimize regression — running 1000+ tests for a README edit wastes time.
+
+1. **Classify changed files**: From the `git diff` and `git status` output (Step 1), identify which files are **source files** vs **non-source files**:
+   - **Source files**: Files matching `LANG_PROFILES[stack].file_ext` (e.g., `.py`) whose path starts with any directory in `LANG_PROFILES[stack].source_dirs` (e.g., `src/` for Python).
+   - **Non-source files**: Everything else — `.md`, `.yml`, `.yaml`, `.json`, `.mmd`, `docs/`, `.github/`, `tests/`, config files, specs, board files.
+2. **Decision**:
+   - If **zero source files** changed AND **no test files** were added/modified:
+     - Log: `"Regression: SKIP — doc-only change, no source files modified"`
+     - Skip regression entirely. Proceed directly to Step 2.7 (Lint Gate).
+   - If **zero source files** changed BUT **new test files** exist (e.g., `tests/unit/test_story*.py` created in this Story):
+     - Log: `"Regression: STORY-ONLY — {N} new test files, no source changes"`
+     - Run ONLY those new test files (they were already validated in Act Phase 3 TDD loop, but re-confirm here).
+     - Skip the full suite. Proceed to Step 2.7.
+   - If **any source files** changed: Continue to Step 1.5 (normal flow).
+
+### Step 1.5: Fast-Suite Shortcut
+> If the last test run completed in **< 30 seconds** (check pytest output or prior run time), skip the decision tree and always run **full regression** — the suite is fast enough that optimizing for incremental provides no benefit. Proceed directly to Step 3.
+
+### Step 1.6: Release Gate — Version Bump Override (R5)
+> **PURPOSE**: Release commits require a full suite to ensure no regressions are hidden.
+1. Run `git diff HEAD~1 pyproject.toml | grep version` (or vs. branch base).
+2. If a version change is detected (e.g., `1.4.0` → `1.4.1`):
+   - Log: `"Regression: FULL — version bump detected, release requires full test suite"`
+   - Skip impact analysis. Proceed directly to Step 3 (full regression).
+3. If no version change: continue to Step 1.7.
+
+### Step 1.7: Impact-Based Analysis (STORY-053)
+> **PURPOSE**: Use `call_graph.mmd` to target only tests affected by changed functions.
+
+1. **Preconditions**: All of the following must be true to attempt impact analysis:
+   - `docs/architecture/graphs/call_graph.mmd` exists.
+   - `regression.strategy` is `impact` (read from `pactkit.yaml`; default: `impact`).
+2. **Identify changed functions**: Use `git diff HEAD~1 --unified=0` on changed source files to extract modified function names (look for `def ` in the diff).
+3. **Run impact command** for each changed function:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py impact --entry <func_name>
+   ```
+   Collect all returned test file paths (space-separated).
+4. **Deduplicate** the collected test paths.
+5. **Decision** (threshold from `regression.max_impact_tests`, default 50):
+   - If total impacted files < threshold: run only impacted test files.
+     - Log: `"Regression: IMPACT-BASED — {N} test files based on call graph analysis"`
+     - Run: `pytest {space-separated test paths}`
+     - Skip Step 2. Proceed to Step 2.3 for logging.
+   - If impacted files ≥ threshold or impact command fails: fall through to Step 2 (Decision Tree).
+   - If no changed functions found in diff: fall through to Step 2.
+
 ### Step 2: Decision Tree (Safe-by-Default)
 > **DEFAULT**: Run **full regression** (`pytest tests/`). This is the safe default.
 
 Run **incremental tests** only if ALL of the following conditions are true:
-- `code_graph.mmd` exists AND was updated in the current session (not stale)
+- `code_graph.mmd` exists AND appears in `git diff HEAD~1 --name-only` or `git status --short` (i.e., the graph was recently updated, not stale)
 - Changed source files ≤ 3 (small, isolated change set)
-- ALL changed source files have direct test mappings via `test_map_pattern` in `LANG_PROFILES`
+- At least ONE changed source file has a direct test mapping via `test_map_pattern` in `LANG_PROFILES`, OR total test count < 500 (fast enough for full suite as fallback)
 - NO changed file is imported by 3+ other modules in `code_graph.mmd`
 - NO test infrastructure files were changed (`conftest.py`, `pytest.ini`, `pyproject.toml [tool.pytest]`)
 - NO version change in `pactkit.yaml` (version bump implies broader impact)
 
 **Fallback**: If `code_graph.mmd` does not exist (e.g., non-PDCA project or not yet generated), always run full regression.
+
+### Step 2.3: Decision Logging (MANDATORY)
+After evaluating the decision tree, output the decision and the reason:
+- If skip: `"Regression: SKIP — doc-only change, no source files modified"`
+- If story-only: `"Regression: STORY-ONLY — {N} new test files, no source changes"`
+- If full (version bump): `"Regression: FULL — version bump detected, release requires full test suite"`
+- If full (other): `"Regression: FULL — {reason}"` (e.g., "Regression: FULL — config.py imported by 5 modules")
+- If impact-based: `"Regression: IMPACT-BASED — {N} test files based on call graph analysis"`
+- If incremental: `"Regression: INCREMENTAL — {N} mapped test files, {conditions summary}"`
+- This log helps the user understand why full regression was chosen and builds trust in the decision tree.
 
 ### Step 2.5: Coverage Verification (Conditional)
 IF `pytest-cov` is available, run tests with coverage on changed source files:
@@ -84,11 +146,20 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 2.  **Auto-Fix**:
     - If tests are GREEN but tasks are `[ ]`, **Ask the user**: "Tests passed but tasks are unchecked. Mark as done?"
     - If user agrees, update `sprint_board.md` immediately.
-3.  **Lessons Auto-append (MANDATORY)**: Append a new row to `docs/architecture/governance/lessons.md`:
-    - Format: `| {YYYY-MM-DD} | {one-line summary of what was learned} | {STORY_ID} |`
-    - Date: today's date
-    - Summary: one sentence describing the key insight, pattern, or pitfall from this Story
-    - This is NOT conditional on Memory MCP — always append to lessons.md
+3.  **Lessons Auto-append with Quality Gate (MANDATORY)**: Evaluate the lesson before appending to `docs/architecture/governance/lessons.md`:
+    - **Step 1 — Score** the lesson on 5 dimensions (1=Low, 3=Medium, 5=High):
+      | Dimension | 1 (Low) | 3 (Medium) | 5 (High) |
+      |-----------|---------|------------|----------|
+      | Specificity | Abstract principles only | Has code example | Covers all usage patterns |
+      | Actionability | Unclear what to do | Main steps understandable | Immediately actionable |
+      | Scope Fit | Too broad or narrow | Mostly appropriate | Name and content aligned |
+      | Non-redundancy | Nearly identical to existing | Some unique perspective | Completely unique value |
+      | Coverage | Partial coverage | Main cases covered | Includes edge cases |
+    - **Step 2 — Bonus**: If Check Phase produced any P0 or P1 findings that inspired this lesson, add **+3** to the total.
+    - **Step 3 — Gate**: Read `done.lesson_quality_threshold` from `pactkit.yaml` (default: **15**).
+      - If total score < threshold: **do NOT append**. Log: `"Lesson skipped (score {N}/25 < threshold {T})"`
+      - If total score >= threshold: append row with format: `| {YYYY-MM-DD} | {summary} (score: {N}/25) | {STORY_ID} |`
+    - This is NOT conditional on Memory MCP — always evaluate and either append or log skip.
 4.  **Invariants Refresh (MANDATORY)**: Update the Invariants section in `docs/architecture/governance/rules.md`:
     - Read the current `rules.md` file.
     - Update the test count to match the actual number from the most recent test run (e.g., "All {N}+ tests must pass").
@@ -103,6 +174,26 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 2.  **Action**: If yes, run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py archive`.
 3.  **Result**: Completed stories are moved to `docs/product/archive/archive_YYYYMM.md`.
 
+## 🎬 Phase 3.5.5: Issue Tracker Verification (Backfill Safety Net)
+> **Purpose**: Verify GitHub Issue exists for the Story; create backfill if Plan phase was skipped.
+1.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
+2.  **If `provider: none` or section missing**: Skip silently, proceed to Phase 3.6.
+3.  **If `provider: github`**:
+    a. **CLI Check**: Run `gh --version`. If unavailable, print warning "Issue tracker verification skipped: gh CLI unavailable" and proceed to Phase 3.6.
+    b. **Search**: Run `gh issue list --search "{STORY_ID}" --state all --json number,title,url` to find existing issue.
+    c. **If issue found**:
+       - Check if Sprint Board entry has issue link (e.g., `[#N](url)`)
+       - If no link: update Sprint Board entry to include `[#{number}]({url})`
+       - Proceed to Phase 3.6 for closure
+    d. **If issue NOT found (Backfill)**:
+       - Create issue: `gh issue create --title "{STORY_ID}: {Story Title}" --body "Spec: docs/specs/{STORY_ID}.md
+
+**Status**: Backfilled during Done phase"`
+       - Parse the returned issue URL
+       - Update Sprint Board entry to include `[#{number}]({url})`
+       - Proceed to Phase 3.6 for closure
+    e. **If any gh command fails**: Print warning with error message, continue to Phase 3.6.
+
 ## 🎬 Phase 3.6: Issue Tracker Closure (Conditional)
 > **Purpose**: Close linked external issues when the Story is done.
 1.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
@@ -112,24 +203,13 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
     - If `gh` CLI unavailable or closure fails: print warning, continue
 3.  **If `provider: none` or section missing**: Skip silently.
 
-## 🎬 Phase 3.7: Deploy & Verify (If Applicable)
-> **Purpose**: Ensure the committed code works correctly in deployed form.
-1.  **Detect Deployer**: Check if the project has a deployer (`pactkit init` or configured in `pactkit.yaml`).
-2.  **Deploy**: If a deployer exists, run it (e.g., `python3 pactkit init`).
-3.  **Smoke Test**: Spot-check deployed artifacts to verify they contain expected content.
-4.  **Skip**: If no deployer is detected, skip this phase and note "No deployer found — skipping deploy verification."
-5.  **Gate**: If deployment or verification fails, **STOP**. Do NOT proceed to commit.
-
-## 🎬 Phase 3.8: Release (Conditional) — use pactkit-release skill
-> If this Story involves a version bump, invoke the release workflow:
-1.  **Detect**: Check if `pyproject.toml` version was changed in this Story.
-2.  **If yes**: Run `update_version`, `snapshot`, and `archive` via pactkit-board skill. Tag with `git tag`.
-3.  **Verify Snapshots**: After the snapshot step, check that `docs/architecture/snapshots/{version}_*.mmd` files exist. If missing, report: "❌ Snapshot verification failed: expected files in snapshots/ for {version}."
-4.  **If no version change**: Skip to Phase 4.
-
 ## 🎬 Phase 4: Git Commit
+0.  **Enterprise Check**: If `enterprise.no_git: true` in `pactkit.yaml`, skip ALL git operations in this phase. Print: "ℹ️ Git operations disabled (enterprise.no_git)". Skip to the Session Context Update phase.
 1.  **Format**: `feat(scope): <title from spec>`
 2.  **Execute**: Run the git commit command.
+3.  **Post-Commit Prompts**:
+    - **Version bump?** If `pyproject.toml` version was changed in this Story: "ℹ️ Version bump detected. Run `/project-release` to create snapshot and git tag."
+    - **Feature branch?** If current branch is not `main`/`master`: "ℹ️ Working on a feature branch. Run `/project-pr` to push and create a pull request."
 
 ## 🎬 Phase 4.5: Session Context Update
 > **Purpose**: Generate `docs/product/context.md` so the next session auto-loads project state.
