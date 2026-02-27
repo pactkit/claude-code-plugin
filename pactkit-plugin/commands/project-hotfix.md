@@ -10,6 +10,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > **PRINCIPLE**: This command is a lightweight fast-fix channel with traceability.
 > Lightweight Spec + Board entry are auto-created. No TDD workflow required.
 > Suitable for typos, configuration changes, style adjustments, obvious bugs, and other minor fixes.
+> **Spec Lint Gate exemption**: This path SKIPS the Spec Lint Gate (Phase 0.5 in `/project-act`). Hotfix Specs use a lightweight format and are not subject to full structural validation.
 
 ## ⚠️ Scope of Application
 - ✅ Fix typos / spelling errors

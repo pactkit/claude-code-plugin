@@ -26,6 +26,43 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - Use `mcp__memory__search_nodes` with the STORY_ID to retrieve any stored architectural decisions or design rationale from the Plan phase
     - Use `mcp__memory__search_nodes` with relevant module/feature keywords to find related past decisions from other stories
 
+## 🛡️ Phase 0.5: Spec Lint Gate (Mandatory)
+> **PURPOSE**: Non-AI structural validation — ensures "Spec is Law" has physical enforcement before any code is written.
+1.  **Run Linter**: Execute the Spec Linter on the current Story's spec:
+    ```bash
+    python3 src/pactkit/skills/spec_linter.py docs/specs/{STORY_ID}.md
+    ```
+    Replace `{STORY_ID}` with the actual Story ID from `$ARGUMENTS` (e.g., `STORY-042`).
+2.  **If ERRORs found**: **STOP**. Output all ERROR and WARN items. Instruct the user:
+    > "Spec Lint failed. Fix the issues above in `docs/specs/{STORY_ID}.md`, then re-run `/project-act`."
+    Do NOT proceed to Phase 1.
+3.  **If WARNs only**: Output the WARN list, then **continue** to Phase 1.
+4.  **If all pass**: Continue silently to Phase 1.
+
+## 📊 Phase 0.6: Consistency Check (Advisory)
+> **PURPOSE**: Left-shift quality — catch Spec ↔ Board ↔ Test Case misalignment at the cheapest point (pure text, before any code).
+> **NON-BLOCKING**: All findings are WARN or INFO. This phase NEVER stops Act.
+1.  **Spec ↔ Board Alignment**:
+    - Parse all `### R{N}:` subsections from `docs/specs/{STORY_ID}.md` → list of requirements
+    - Parse the Story's task list from `docs/product/sprint_board.md` (the `- [ ]` items under this Story)
+    - Cross-reference: for each requirement, find a matching task (exact `R{N}` ID OR ≥50% keyword overlap)
+    - Output alignment matrix:
+      ```
+      | Spec Requirement | Board Task | Status |
+      | R1: xxx          | Task: xxx  | ✅ Aligned |
+      | R2: xxx          | —          | ⚠️ Missing Task |
+      | —                | Task: yyy  | ⚠️ No matching Requirement |
+      ```
+2.  **Spec AC ↔ Test Case Coverage**:
+    - Parse all `### AC{N}:` subsections from the Spec
+    - Check if `docs/test_cases/{STORY_ID}_case.md` exists
+    - If exists: cross-reference AC items with Scenario entries; report uncovered ACs
+    - If not exists: output `ℹ️ Test Case not yet created (normal — generated during Check phase)`
+3.  **Summary**:
+    - Output counts: `Alignment: {N}/{total} requirements matched | Coverage: {N}/{total} ACs covered`
+    - If WARNs found: "Consider updating the Board tasks to match Spec requirements before proceeding."
+4.  **Continue**: Regardless of findings, proceed to Phase 1.
+
 ## 🎬 Phase 1: Precision Targeting
 1.  **Visual Scan**: Run `visualize --focus <module>` to see neighbors.
     - For projects with 50+ source files, add `--depth 2` to limit the graph to 2 levels of dependencies.
@@ -56,25 +93,26 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - **Normal TDD failures** (`AssertionError`, `TypeError`, `ValueError`, etc.) proceed normally — modify your source code and iterate.
 3.  **Regression Check (Read-Only Gate)**: After the TDD loop is GREEN, run a broader regression check.
     - **Identify changed modules**: `git diff --name-only HEAD` to list modified source files.
+    - **Doc-Only detection**: Classify changed files using `LANG_PROFILES[stack].source_dirs` and `file_ext`. If zero source files were changed (only `.md`, `.yml`, `docs/`, `.github/`, etc.), skip the broader regression — the TDD loop already validated the new tests. Log: `"Regression: SKIP — doc-only change, no source files modified"`. Proceed to Phase 4.
     - **Map to related tests**: For each changed file, find its corresponding test file using the `test_map_pattern` in `LANG_PROFILES`.
-    - **Run regression**: Execute the mapped test files plus the full test suite if unsure about change scope.
-    - **Fallback**: If no test mapping can be determined or you are unsure about dependency impact, fall back to the full test suite.
+    - **Scope decision**: Check if any changed file is imported by 3+ other modules in `code_graph.mmd`. If yes, run the **full test suite**. If no (low fan-in, isolated change), run only the **mapped test files**.
+    - **Fallback**: If no test mapping can be determined, or `code_graph.mmd` does not exist, fall back to the full test suite.
     - **CRITICAL — Pre-existing test failure protocol**:
       - If a pre-existing test (one you did NOT create in Phase 2) fails, **DO NOT modify** the failing test or the code it tests.
       - **DO NOT loop** — this is a one-shot check, not an iterative loop.
       - **STOP** and report to the user: which test failed, what it appears to test, and which of your changes likely caused the failure.
       - Suggest options: (a) you revert your change that caused the regression, or (b) the user reviews and provides guidance.
       - You MUST NOT assume you understand the design intent behind pre-existing tests — the project may have adopted PDCA mid-way and there is no Spec for older features.
-4.  **Lint Check (Conditional)**: IF a CI config exists (`.github/workflows/*.yml` or similar) or `lint_command` is set in `LANG_PROFILES`:
-    - Run the `lint_command` for the detected stack (e.g., `ruff check src/ tests/` for Python).
-    - If lint fails, fix the lint errors in your own new/modified files only, then re-run.
-    - Do NOT modify pre-existing files to fix lint unless the lint error is in a file you changed in this Story.
 
 ## 🎬 Phase 4: Sync & Document
 1.  **Hygiene**: Delete temp files.
-2.  **Update Reality**:
-    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
-    - Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+2.  **Update Reality (Lazy Visualize)**:
+    - Check if `git diff --name-only HEAD` includes any files in `LANG_PROFILES[stack].source_dirs` OR if `code_graph.mmd` does not exist.
+    - **If source files changed OR graph missing**: Run all three visualize commands:
+        - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize`
+        - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode class`
+        - `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize --mode call`
+    - **If no source files changed AND graph exists**: Skip with log: `"Graph up-to-date — no source changes"`
 3.  **Update Board (CRITICAL)**:
     - Mark the tasks in `docs/product/sprint_board.md` as `[x]`.
     - Use `update_task` or manual edit.

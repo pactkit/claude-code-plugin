@@ -1,15 +1,19 @@
 ---
 name: pactkit-release
-description: "Version release: snapshot, archive, and Git tag"
+description: "Version release: snapshot, archive, Git tag, and GitHub Release"
 ---
 
 # PactKit Release
 
-Version release management — update versions, snapshot architecture, create Git tags.
+Version release management — update versions, snapshot architecture, create Git tags, and publish GitHub Releases.
 
 ## When Invoked
-- **Done Phase 4** (release variant): When a version bump story is being closed.
-- Standalone release workflow when cutting a new version.
+- **`/project-release` command**: VERSION is passed explicitly from the command's pre-flight check.
+- **Standalone / legacy path**: VERSION is not provided — auto-detected from `pyproject.toml`.
+
+## Version Parameter
+- If `VERSION` is provided (e.g., by `/project-release`): use it directly, skip auto-detection.
+- If version is not provided: auto-detect by running `git diff HEAD~1 pyproject.toml | grep version` and extracting the new value.
 
 ## Protocol
 
@@ -27,3 +31,11 @@ Version release management — update versions, snapshot architecture, create Gi
 - Run `archive` via pactkit-board skill.
 - Commit: `git commit -am "chore(release): $VERSION"`.
 - Tag: `git tag $VERSION`.
+
+### 4. GitHub Release (Conditional)
+- **Check config**: Read `pactkit.yaml` for `release.github_release`.
+  - If `release.github_release: true`: proceed with GitHub Release creation.
+  - If `release.github_release: false` or section missing: log "GitHub Release: SKIP — not configured" and stop.
+- Extract the `[$VERSION]` section from `CHANGELOG.md` as release notes.
+- Create a GitHub Release: `gh release create $VERSION --title "$VERSION" --notes "$NOTES"`.
+- Verify: `gh release view $VERSION` confirms the release exists and is marked Latest.

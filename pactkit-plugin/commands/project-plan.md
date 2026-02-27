@@ -36,6 +36,34 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - Report what was added (e.g., "Config refreshed: added hooks, ci sections").
     - If the config is already complete and up to date, skip silently to Phase 1.
 
+## 🧠 Phase 0.7: Clarify Gate (Auto-detect Ambiguity)
+> **PURPOSE**: Surface and resolve requirement ambiguity before the Spec is written. Better to clarify now than rewrite a Spec.
+1.  **Detect Ambiguity**: Analyze the user's input (`$ARGUMENTS`) against these signals:
+    - No quantitative metrics ("高并发" without QPS, "fast" without benchmark)
+    - No boundary conditions ("user management" without specifying which operations)
+    - No technical constraints (no auth method, no framework specified)
+    - Single sentence input (< 15 words) — likely under-specified
+    - Vague quantifiers ("some", "many", "a few", "大量", "一些", "简单")
+    - No target user specified
+2.  **Trigger Logic**:
+    - ≥ 2 High signals (no metrics, no boundaries) → **Auto-trigger** Clarify
+    - 1 High + ≥ 2 Medium signals → **Auto-trigger** Clarify
+    - ≥ 2 Medium signals → **Suggest** Clarify (ask user: "Input seems underspecified. Clarify? yes/skip")
+    - Otherwise → **Silent skip**
+3.  **Greenfield Force-Trigger**: If Phase 0 detected a Greenfield project and the user chose to continue with `/project-plan` (not `/project-design`), **always trigger** Clarify regardless of score.
+4.  **If triggered**: Generate 3–6 structured questions covering:
+    - **Scope**: "What specific operations are included? Please list them."
+    - **Users**: "Who is the target user? Are there multiple roles?"
+    - **Constraints**: "Any technical constraints? (required framework, compatibility requirements)"
+    - **Scale**: "Expected data volume / concurrency / user count?"
+    - **Edge Cases**: "What should happen when [failure scenario]?"
+    - **Non-Goals**: "What is explicitly NOT in scope?"
+    - Ask questions in the user's language (Language Matching rule).
+5.  **User Response**:
+    - User answers all/some → merge into `enriched_input`; proceed to Phase 1 with `enriched_input`
+    - User inputs "skip" or declines → proceed with original input (Clarify MUST NOT block Plan)
+6.  **Output**: The enriched_input (original + answers) is used as context for Phase 1 onwards.
+
 ## 🎬 Phase 1: Archaeology (The "Know Before You Change" Step)
 1.  **Visual Scan**: Run `visualize` to see the module dependency graph.
     - **Mode Selection**: Use `--mode class` for structure analysis, `--mode call` for logic modification, default for overview.
@@ -56,21 +84,23 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - **MUST**: Fill in the `## Requirements` section using RFC 2119 keywords (MUST/SHOULD/MAY).
     - **MUST**: Fill in the `## Acceptance Criteria` section with Given/When/Then scenarios.
     - Each Scenario SHOULD map to a verifiable test case in `docs/test_cases/`.
-    - **MUST**: Fill in the `Release` metadata field with the current version from `pactkit.yaml` (or leave `TBD` if unknown).
+    - **MUST**: Fill in the `Release` metadata field by reading the `version` field from `.claude/pactkit.yaml` (or `pyproject.toml`). Use that EXACT value — do NOT increment or predict a future version. If the file cannot be read, use `TBD`.
+    - **OPTIONAL — Implementation Steps**: If Phase 1 Trace identifies 2+ files to modify, add `## Implementation Steps` section with table format:
+      ```
+      | Step | File | Action | Dependencies | Risk |
+      |------|------|--------|--------------|------|
+      | 1 | `src/foo.py` | Description | None | Low |
+      ```
+      The `Dependencies` column accepts `None`, `Step N`, or comma-separated step references. The `Risk` column accepts `Low`, `Medium`, `High`. This section is optional but RECOMMENDED for multi-file changes.
+    - **Spec Lint Self-Check**: After writing the Spec, run `python3 src/pactkit/skills/spec_linter.py docs/specs/{ID}.md`. If ERROR rules fail, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until clean. This prevents the Spec from being rejected at Act Phase 0.5.
 2.  **Board**: Add Story using `add_story`.
 3.  **Memory MCP (Conditional)**: IF `mcp__memory__create_entities` tool is available, store the design context:
     - Use `mcp__memory__create_entities` with: `name: "{STORY_ID}"`, `entityType: "story"`, `observations: [key architectural decisions, target files, design rationale]`
     - IF this story depends on other stories, use `mcp__memory__create_relations` to record dependencies (e.g., `from: "{STORY_ID}", to: "STORY-XXX", relationType: "depends_on"`)
-4.  **Issue Tracker (Conditional)**: IF `pactkit.yaml` has `issue_tracker.provider: github`:
-    - Check if `gh` CLI is available (run `gh --version`)
-    - If available: create a GitHub Issue with `gh issue create --title "STORY-XXX: Title" --body "Requirements summary"`
-    - Update the Sprint Board entry to include the issue URL
-    - If `gh` CLI is unavailable or issue creation fails: print warning, continue without issue link
-    - If `issue_tracker.provider: none` or section missing: skip silently
-5.  **Session Context Update**: Update `docs/product/context.md` to reflect the new Story:
+4.  **Session Context Update**: Update `docs/product/context.md` to reflect the new Story:
     - Read `docs/product/sprint_board.md` (now containing the new Story)
     - Read `docs/architecture/governance/lessons.md` (last 5 entries)
     - Run `git branch --list 'feature/*' 'fix/*'`
     - Write `docs/product/context.md` using the standard format (see `/project-done` Phase 4.5 for format)
     - Set "Last updated by" to `/project-plan`
-6.  **Handover**: "Trace complete. Spec created. Ready for Act."
+5.  **Handover**: "Trace complete. Spec created. Ready for Act."
