@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v1.5.0 Modular)
+# PactKit Global Constitution (v1.6.0 Modular)
 
 # Core Protocol
 
@@ -121,12 +121,17 @@ Understand the current state before modifying code:
 | Skill | Embedded In | Purpose |
 |-------|-------------|---------|
 | `pactkit-trace` | Plan Phase 1, Act Phase 1 | Deep code tracing and execution flow analysis |
-| `pactkit-draw` | Plan Phase 2, Design Phase 2 | Generate Draw.io XML architecture diagrams |
-| `pactkit-status` | Init Phase 6, cold-start | Project state overview |
-| `pactkit-doctor` | Init auto-check | Diagnose project health |
-| `pactkit-review` | Check Phase 4 (PR variant) | PR Code Review |
 | `pactkit-release` | Release Phase 1 (snapshot/archive) | Version release: snapshot, archive, Tag |
-| `pactkit-analyze` | Act Phase 0.6 | Cross-artifact consistency check: Spec ↔ Board ↔ Test Cases |
+
+## Agent Skills (invoked via agent roles, not by commands)
+
+| Skill | Available To | Purpose |
+|-------|-------------|---------|
+| `pactkit-draw` | visual-architect, system-architect agents | Generate Draw.io XML architecture diagrams |
+| `pactkit-status` | system-medic agent | Project state overview |
+| `pactkit-doctor` | system-medic agent | Diagnose project health |
+| `pactkit-review` | qa-engineer agent | PR Code Review |
+| `pactkit-analyze` | senior-developer (Act Phase 0.6 inline) | Cross-artifact consistency check: Spec ↔ Board ↔ Test Cases |
 
 # Workflow Conventions
 

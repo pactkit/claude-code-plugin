@@ -26,11 +26,19 @@ allowed-tools: [Read, Bash, Grep, Glob]
     * *UI/DOM/Interaction?* -> Strategy: **Browser Level**.
 3.  **Detect Stack**: If changed files include `.tsx`/`.vue`/`.svelte`, also consult `DEV_REF_FRONTEND` for client-side security and rendering performance checks.
 4.  **Gap Analysis**: Do we have a structured Test Case? If not, plan to create one.
+5.  **Security Scope**: Check if the Spec contains a `## Security Scope` section.
+    - If present: parse the `Applicable` column for each SEC-* check. Pass this scope to Phase 1.
+    - If absent (legacy Spec): fall back to running all 8 checks (backward compatible).
 
 ## Phase 1: Security Scan (OWASP+)
 > **Config**: If `pactkit.yaml` contains `check.security_checklist: false`, skip this phase and log: "Security checklist disabled via config".
+> **Scope**: If `pactkit.yaml` contains `check.security_scope_override: full`, run ALL 8 checks regardless of the Spec's Security Scope. Otherwise, use the scope parsed in Phase 0.
 
-Evaluate all code related to the Story against this structured 8-item checklist. For each item, output **PASS**, **FAIL**, or **N/A** (not applicable to this story).
+For each SEC-* check:
+- If the Security Scope (from Phase 0) marks the check as **Applicable: Yes** (or no scope available): execute the check and output **PASS**, **FAIL**, or **N/A** (not applicable to this story).
+- If the Security Scope marks the check as **Applicable: No** or **N/A**: output `SEC-{N}: SKIPPED ({reason from scope table})` — do not execute the check.
+
+Evaluate all applicable code related to the Story against this structured 8-item checklist:
 
 | ID | Category | Check |
 |----|----------|-------|

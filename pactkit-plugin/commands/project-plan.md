@@ -39,12 +39,12 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🧠 Phase 0.7: Clarify Gate (Auto-detect Ambiguity)
 > **PURPOSE**: Surface and resolve requirement ambiguity before the Spec is written. Better to clarify now than rewrite a Spec.
 1.  **Detect Ambiguity**: Analyze the user's input (`$ARGUMENTS`) against these signals:
-    - No quantitative metrics ("高并发" without QPS, "fast" without benchmark)
-    - No boundary conditions ("user management" without specifying which operations)
-    - No technical constraints (no auth method, no framework specified)
-    - Single sentence input (< 15 words) — likely under-specified
-    - Vague quantifiers ("some", "many", "a few", "大量", "一些", "简单")
-    - No target user specified
+    - [High] No quantitative metrics ("高并发" without QPS, "fast" without benchmark)
+    - [High] No boundary conditions ("user management" without specifying which operations)
+    - [Medium] No technical constraints (no auth method, no framework specified)
+    - [Medium] Single sentence input (< 15 words) — likely under-specified
+    - [Medium] Vague quantifiers ("some", "many", "a few", "大量", "一些", "简单")
+    - [Medium] No target user specified
 2.  **Trigger Logic**:
     - ≥ 2 High signals (no metrics, no boundaries) → **Auto-trigger** Clarify
     - 1 High + ≥ 2 Medium signals → **Auto-trigger** Clarify
@@ -92,6 +92,29 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       | 1 | `src/foo.py` | Description | None | Low |
       ```
       The `Dependencies` column accepts `None`, `Step N`, or comma-separated step references. The `Risk` column accepts `Low`, `Medium`, `High`. This section is optional but RECOMMENDED for multi-file changes.
+    - **MUST — Security Scope**: Add `## Security Scope` section to the Spec based on the changed files identified in Phase 1 Trace. Use these detection rules:
+      | Check | Applicable When |
+      |-------|-----------------|
+      | SEC-1 | Any source code file modified (`.py`, `.js`, `.ts`, `.go`, `.java`, etc.) |
+      | SEC-2 | Code contains `request.`, `form.`, `input`, `argv`, `sys.stdin`, `process.argv` |
+      | SEC-3 | Files in `models/`, `dao/`, `repository/`; or code contains `SELECT`, `INSERT`, `UPDATE`, `DELETE`, ORM patterns |
+      | SEC-4 | Frontend files (`.tsx`, `.vue`, `.svelte`, `.html`); or code contains `innerHTML`, `dangerouslySetInnerHTML`, template rendering |
+      | SEC-5 | Files in `auth/`, `session/`, `login/`; or code contains `token`, `jwt`, `cookie`, `session` |
+      | SEC-6 | Files in `api/`, `routes/`, `endpoints/`, `controllers/`; or new public endpoints added |
+      | SEC-7 | Files in `api/`, `routes/`; or code contains exception handling patterns |
+      | SEC-8 | Dependency files modified (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`) |
+
+      **Docs/tests-only shortcut**: If ONLY files matching `docs/**`, `tests/**`, `*.md`, `README*` are modified, mark ALL checks N/A with reason "docs/tests only".
+
+      Output format in the Spec:
+      ```markdown
+      ## Security Scope
+      | Check | Applicable | Reason |
+      |-------|------------|--------|
+      | SEC-1 | Yes | Source code modified |
+      | SEC-2 | No | No user input handling |
+      | SEC-3 | Yes | models/user.py modified |
+      ```
     - **Spec Lint Self-Check**: After writing the Spec, run `python3 src/pactkit/skills/spec_linter.py docs/specs/{ID}.md`. If ERROR rules fail, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until clean. This prevents the Spec from being rejected at Act Phase 0.5.
 2.  **Board**: Add Story using `add_story`.
 3.  **Memory MCP (Conditional)**: IF `mcp__memory__create_entities` tool is available, store the design context:
