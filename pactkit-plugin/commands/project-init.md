@@ -8,18 +8,16 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 - **Agent**: System Architect
 
 ## 🧠 Phase 0: The Thinking Process (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block before using any tools.
 1.  **Environment Check**: Is this a fresh folder or legacy project?
 2.  **Compliance**: Does the user need `pactkit.yaml`?
 3.  **Strategy**: If legacy, I must prioritize `visualize` to capture Reality.
 
 ## 🛡️ Phase 0.5: Git Repository Guard
-> **INSTRUCTION**: Check if the directory is inside a git repository before creating files.
+> **INSTRUCTION**: Check if the directory is inside a git repository. This check is non-interactive — never prompt the user.
 1.  **Check**: Run `git rev-parse --is-inside-work-tree` (suppress stderr).
 2.  **If NOT a git repo** (command fails):
-    - Ask the user: "No git repository detected. Initialize one with `git init`?"
-    - **If user confirms**: Run `git init` in the current directory.
-    - **If user declines**: Print warning: "⚠️ Git operations (commit, branch) will not work without a repository." Continue with the rest of init.
+    - Print warning: "⚠️ No git repository detected. Git operations (commit, branch) will not work. Run `git init` to initialize one."
+    - Continue with the rest of init. Do NOT prompt or block.
 3.  **If already a git repo**: Skip silently to Phase 1.
 
 ## 🎬 Phase 1: Environment & Config

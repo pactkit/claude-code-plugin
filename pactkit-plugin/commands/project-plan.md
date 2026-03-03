@@ -8,7 +8,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - **Agent**: System Architect
 
 ## 🧠 Phase 0: The Thinking Process (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block.
 1.  **Analyze Intent**: New feature (Expansion) or Bugfix/Refactor (Modification)?
 2.  **Strategy**:
     - If **New Feature**: Focus on `system_design.mmd` (Architecture).

@@ -25,7 +25,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > This enables `model: "sonnet"` for cost-efficient subagents (QA, Security, Closer).
 
 ## 🧠 Phase 0: The Thinking Process (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block.
 > **CRITICAL**: Do NOT use the `Read` tool in this phase. Lead must stay thin.
 1.  **Analyze**: Parse the requirement from `$ARGUMENTS`.
 2.  **STORY-ID**: Determine next available ID by scanning `docs/specs/` using **Glob only** (not Read).
