@@ -22,6 +22,18 @@ Understand the current state before modifying code:
 - This applies to all output including PDCA command phases, explanations, and summaries.
 - Technical terms (function names, file paths, git commands) remain in their original form.
 
+## Subagent Model Selection
+When spawning subagents via the Agent tool, select the `model` parameter based on task complexity:
+
+| Model | When to Use | Examples |
+|-------|-------------|----------|
+| **haiku** | Simple exploration, file search, format checks, info extraction | Find files matching pattern, check if X exists, extract config values |
+| **sonnet** | Code implementation, test writing, most general-purpose tasks | Write function, create tests, refactor module, fix bug |
+| **opus** | Complex architecture decisions, deep reasoning, multi-step planning | Design system architecture, resolve conflicting requirements, tricky debugging |
+
+**Default**: If uncertain, use `sonnet` — it balances capability and cost.
+**Cost awareness**: `haiku` is ~10x cheaper than `sonnet`, `sonnet` is ~5x cheaper than `opus`. Prefer the smallest model that can reliably complete the task.
+
 # The Hierarchy of Truth
 > **CRITICAL**: Code is NOT the law.
 1.  **Tier 1**: **Specs** (`docs/specs/*.md`) & **Test Cases** (`docs/test_cases/*.md`).
