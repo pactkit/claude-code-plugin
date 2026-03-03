@@ -6,9 +6,10 @@ def nl(): return chr(10)
 # Shared pattern for all recognized work item prefixes
 ITEM_ID_RE = r'(?:STORY|HOTFIX|BUG)-\d+'
 
-# Flexible story title pattern: matches both ### [ID] Title and ### ID: Title and ### ID Title
+# Flexible story title pattern: matches ### or #### (tolerant) with [ID] or ID: or ID formats
 # Group 1: story ID, Group 2: title text
-_TITLE_RE = rf'^### \[?({ITEM_ID_RE})\]?:?\s*(.*)'
+# BUG-027: Support both ### and #### for backward compatibility
+_TITLE_RE = rf'^#{{3,4}} \[?({ITEM_ID_RE})\]?:?\s*(.*)'
 
 # Section markers
 _BACKLOG = '## 📋 Backlog'
@@ -135,8 +136,8 @@ def update_task(sid, tasks_list):
     if not p.exists():
         return '❌ No Board'
     content = p.read_text(encoding='utf-8')
-    # Locate the story block
-    story_pat = rf'(### \[?{re.escape(sid)}\]?:?.*?)(?=\n### |\Z)'
+    # Locate the story block (BUG-027: support ### and ####)
+    story_pat = rf'(#{{3,4}} \[?{re.escape(sid)}\]?:?.*?)(?=\n#{{3,4}} |\Z)'
     story_match = re.search(story_pat, content, re.DOTALL)
     if not story_match:
         return f'❌ Story {sid} not found'
@@ -213,7 +214,8 @@ def archive_stories():
     archive_dir = Path.cwd() / 'docs/product/archive'
     if not board_path.exists(): return '❌ No Board'
     content = board_path.read_text(encoding='utf-8')
-    parts = re.split(r'(?=^### \[?(?:STORY|HOTFIX|BUG)-)', content, flags=re.MULTILINE)
+    # BUG-027: Support both ### and #### for backward compatibility
+    parts = re.split(r'(?=^#{3,4} \[?(?:STORY|HOTFIX|BUG)-)', content, flags=re.MULTILINE)
     active_parts = [parts[0]]
     archived_parts = []
     for part in parts[1:]:

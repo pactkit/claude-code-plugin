@@ -80,7 +80,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
     - *Check*: Is it still "No code yet"? If files exist in src, this graph MUST contain classes.
 
 ## 🎬 Phase 4: Project Skeleton
-1.  **Board**: Create `docs/product/sprint_board.md` if missing.
+1.  **Board**: Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_board` if `docs/product/sprint_board.md` does not exist.
+    - This ensures the board has all three section headers: `## 📋 Backlog`, `## 🔄 In Progress`, `## ✅ Done`.
 
 ## 🎬 Phase 5: Knowledge Base (The Law)
 1.  **Law**: Write `docs/architecture/governance/rules.md`.
