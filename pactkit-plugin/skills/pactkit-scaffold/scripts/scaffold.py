@@ -129,6 +129,30 @@ def create_skill(name, desc, base_dir=None):
     (root / 'references' / '.gitkeep').write_text('', encoding='utf-8')
     return f'✅ Skill: {root}'
 
+# --- BOARD ---
+def create_board():
+    """Create standard sprint_board.md with all section headers."""
+    p = Path.cwd() / 'docs' / 'product' / 'sprint_board.md'
+    if p.exists():
+        return f'⚠️ Board already exists: {p}'
+    if not p.parent.exists():
+        p.parent.mkdir(parents=True, exist_ok=True)
+    c = nl().join([
+        '# Sprint Board',
+        '',
+        '## 📋 Backlog',
+        '',
+        '',
+        '## 🔄 In Progress',
+        '',
+        '',
+        '## ✅ Done',
+        '',
+    ])
+    p.write_text(c, encoding='utf-8')
+    return f'✅ Board Created: {p}'
+
+
 # --- PRD ---
 def create_prd(product_name):
     p = Path.cwd() / 'docs' / 'product' / 'prd.md'
@@ -289,6 +313,7 @@ if __name__ == '__main__':
     p_spec = sub.add_parser('create_spec'); p_spec.add_argument('story_id'); p_spec.add_argument('title')
     p_prd = sub.add_parser('create_prd'); p_prd.add_argument('product_name')
     p_skill = sub.add_parser('create_skill'); p_skill.add_argument('skill_name'); p_skill.add_argument('description')
+    sub.add_parser('create_board')
 
     a = parser.parse_args()
     if a.cmd == 'create_test_file': print(create_test_file(a.file_path))
@@ -297,3 +322,4 @@ if __name__ == '__main__':
     elif a.cmd == 'create_spec': print(create_spec(a.story_id, a.title))
     elif a.cmd == 'create_prd': print(create_prd(a.product_name))
     elif a.cmd == 'create_skill': print(create_skill(a.skill_name, a.description))
+    elif a.cmd == 'create_board': print(create_board())
