@@ -21,8 +21,11 @@ SCAN_EXCLUDES = {
     'skills', 'commands', 'rules', 'agents',  # PactKit marketplace dirs (BUG-006)
 }
 
+MAX_SCAN_FILES = 500  # STORY-060: file count ceiling to prevent hangs on large repos
+
 
 def _scan_files(root):
+    import sys as _sys
     excludes = SCAN_EXCLUDES
     all_files = []
     module_index = {}
@@ -30,6 +33,9 @@ def _scan_files(root):
 
     for p in root.rglob('*.py'):
         if any(part in excludes for part in p.parts): continue
+        if len(all_files) >= MAX_SCAN_FILES:
+            print(f"⚠️ Scan truncated at {MAX_SCAN_FILES} files. Use --focus <module> to narrow scope.", file=_sys.stderr)
+            break
         all_files.append(p)
         node_id = str(p.relative_to(root)).replace(os.sep, '_').replace('.', '_').replace('-', '_')
         file_to_node[p] = node_id
@@ -46,7 +52,7 @@ def _scan_files(root):
                 if len(rel_path.parts) > 2 and rel_path.parts[0] == 'src':
                      short_pkg = '.'.join(rel_path.parts[1:-1])
                      module_index[short_pkg] = p
-        except: pass
+        except (SyntaxError, UnicodeDecodeError, ValueError): pass
     return all_files, module_index, file_to_node
 
 # --- MODE: FILE (v1.3.0) ---
@@ -87,7 +93,7 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=
                                 edges.append(edge)
                             adjacency.setdefault(consumer_id, set()).add(pid)
                             adjacency.setdefault(pid, set()).add(consumer_id)
-        except: pass
+        except (SyntaxError, UnicodeDecodeError, ValueError): pass
 
     final_lines = ['graph TD']
     if focus:
@@ -191,7 +197,7 @@ def _build_class_graph(root, all_files, focus):
                             sig = f"{prefix}{item.name}({', '.join(args)})"
                             methods.append(sig)
                     classes.append((rel, node.name, bases, methods))
-        except: pass
+        except (SyntaxError, UnicodeDecodeError, ValueError): pass
 
     # Filter by focus
     if focus:
@@ -240,7 +246,7 @@ def _build_call_graph(root, all_files, focus, entry):
                             func_registry[qname] = rel
                             callees = _extract_calls(item, current_class=node.name)
                             call_edges[qname] = callees
-        except: pass
+        except (SyntaxError, UnicodeDecodeError, ValueError): pass
 
     # Pass 3: Resolve short names to qualified names where possible
     all_func_names = set(func_registry.keys())
@@ -360,7 +366,7 @@ def _scan_call_edges(root, all_files):
                             qname = f'{node.name}.{item.name}'
                             func_registry[qname] = rel
                             call_edges[qname] = _extract_calls(item, current_class=node.name)
-        except: pass
+        except (SyntaxError, UnicodeDecodeError, ValueError): pass
     return func_registry, call_edges
 
 

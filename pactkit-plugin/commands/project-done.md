@@ -8,7 +8,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 - **Agent**: Repo Maintainer
 
 ## 🧠 Phase 0: The Thinking Process (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block.
 1.  **Audit**: Are tests passing? Is the Board updated?
 2.  **Semantics**: Determine correct Conventional Commit scope.
 

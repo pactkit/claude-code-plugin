@@ -21,7 +21,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - ❌ Multi-module refactoring → use `/project-plan` + `/project-act`
 
 ## 🧠 Phase 0: Locate & Register (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block.
 1.  **Parse**: Understand what needs to be fixed from `$ARGUMENTS`.
 2.  **Locate**: Use `Grep` or `Glob` to quickly locate the target file and code line.
 3.  **Assess**: Confirm this is a minor fix (suitable for Hotfix), not a change requiring full PDCA.

@@ -12,7 +12,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > "I have an idea" and "I have a prioritized backlog ready for `/project-sprint`."
 
 ## 🧠 Phase 0: The Thinking Process (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block.
 1.  **Parse Vision**: What is the core product idea? What problem does it solve?
 2.  **Identify Domain**: E-commerce, SaaS, internal tool, mobile app, CLI, etc.
 3.  **Detect Stack Hints**: Does the user mention specific technologies? (React, Python, Go, etc.)
@@ -62,24 +61,40 @@ For each key screen:
 - **User Flow**: Step-by-step interaction sequence
 - **shadcn Integration (Conditional)**: IF `components.json` exists in the project root, use `mcp__shadcn__search_items_in_registries` to find matching UI components for each page element. Include the shadcn component names (e.g., `@shadcn/button`, `@shadcn/card`) in the component hierarchy.
 
-### 1.6 API Design
+### 1.6 Prototype Generation
+> **Goal**: Generate runnable HTML prototypes for each key page from Section 1.5.
+
+1.  **For each key page** defined in Section 1.5, generate a single self-contained `.html` file:
+    - **Tailwind CSS** via CDN: `<script src="https://cdn.tailwindcss.com"></script>`
+    - **Lucide Icons** via CDN: `<script src="https://unpkg.com/lucide@latest"></script>`
+    - **Vanilla JavaScript** for interactions (click handlers, toggles, form validation)
+    - No React, Vue, or any framework — zero build step required
+2.  **Write** each prototype to `docs/prototypes/{page-name}.html` (create the directory if needed).
+3.  **Content Requirements**:
+    - Responsive layout (mobile-first with Tailwind breakpoints)
+    - Realistic placeholder content (not "Lorem ipsum" — use domain-relevant text from Personas)
+    - Interactive elements wired up (buttons show feedback, forms validate, modals open/close)
+    - Call `lucide.createIcons()` at the end of `<body>` to render icons
+4.  **Browser Preview (Conditional)**: IF `mcp__playwright__browser_navigate` tool is available, open each prototype in the browser for live preview. IF Playwright MCP is not available, print the file path for manual opening.
+
+### 1.7 API Design
 - List endpoints: `METHOD /path → description`
 - Define core data models (entity fields and relationships)
 - Specify auth strategy (JWT, session, OAuth, API key)
 
-### 1.7 Non-Functional Requirements
+### 1.8 Non-Functional Requirements
 - **Performance**: Response time targets, throughput expectations
 - **Security**: Auth model, data encryption, OWASP baseline
 - **Scalability**: Expected user load, horizontal vs vertical scaling
 
-### 1.8 Success Metrics
+### 1.9 Success Metrics
 Define measurable KPIs per Epic:
 
 | Epic | Metric | Target | How to Measure |
 |------|--------|--------|----------------|
 | ...  | ...    | ...    | ...            |
 
-### 1.9 MVP Roadmap (Three-Horizon Framework)
+### 2.0 MVP Roadmap (Three-Horizon Framework)
 Assign each Story to a horizon:
 
 - **Now (Sprint 1-3)**: Core MVP — must-have features to validate the product
@@ -116,6 +131,7 @@ Assign each Story to a horizon:
 | Artifact | Path | Count |
 |----------|------|-------|
 | PRD | `docs/product/prd.md` | 1 |
+| Prototypes | `docs/prototypes/{page-name}.html` | M |
 | Specs | `docs/specs/STORY-{NNN}.md` | N |
 | Board Entries | `docs/product/sprint_board.md` | N |
 | Architecture | `docs/architecture/graphs/system_design.mmd` | 1 |
@@ -126,6 +142,6 @@ Assign each Story to a horizon:
 ## ⚠️ What This Command Does NOT Do
 - Does NOT write implementation code — only PRD, Specs, and architecture design
 - Does NOT include market sizing (TAM/SAM/SOM) or pricing strategy — AI cannot produce reliable market data
-- Does NOT generate UI wireframe images — page design is text-based component hierarchy
+- Does NOT generate production UI code (React/Vue/Svelte) — prototypes are HTML + Tailwind only, meant for design validation not deployment
 - Does NOT enforce a specific tech stack — recommendations only, not mandates
 - Does NOT depend on WebSearch — works entirely from user input

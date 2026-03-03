@@ -19,7 +19,6 @@ allowed-tools: [Read, Bash, Grep, Glob]
 | **P3** | Low | Optional — style, naming, minor suggestion |
 
 ## Phase 0: The Thinking Process (Mandatory)
-> **INSTRUCTION**: Output a `<thinking>` block before using any tools.
 1.  **Analyze Context**: Read the active `docs/specs/{ID}.md`.
 2.  **Determine Layer**:
     * *Logic Only?* -> Strategy: **API Level**.
