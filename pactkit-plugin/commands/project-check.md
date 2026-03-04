@@ -23,7 +23,7 @@ allowed-tools: [Read, Bash, Grep, Glob]
 2.  **Determine Layer**:
     * *Logic Only?* -> Strategy: **API Level**.
     * *UI/DOM/Interaction?* -> Strategy: **Browser Level**.
-3.  **Detect Stack**: If changed files include `.tsx`/`.vue`/`.svelte`, also consult `DEV_REF_FRONTEND` for client-side security and rendering performance checks.
+3.  **Detect Stack**: If changed files include `.tsx`/`.vue`/`.svelte`, also apply frontend-specific checks (component structure, accessibility, rendering performance).
 4.  **Gap Analysis**: Do we have a structured Test Case? If not, plan to create one.
 5.  **Security Scope**: Check if the Spec contains a `## Security Scope` section.
     - If present: parse the `Applicable` column for each SEC-* check. Pass this scope to Phase 1.
