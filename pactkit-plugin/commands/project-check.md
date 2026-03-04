@@ -102,27 +102,13 @@ Choose the strategy identified in Phase 0:
 
 ### Strategy B: Browser Level (Visual & Real)
 * **Context**: UI, DOM, User Flows.
-* **Action**:
-    1.  **Check Tool**: Is `playwright` installed?
-    2.  Create/Run `tests/e2e/browser/test_{STORY_ID}_browser.py`.
-    * *Note*: Use `--headless` unless debugging.
-* **Playwright MCP (Conditional)**: IF `mcp__playwright__browser_snapshot` tool is available, prefer using Playwright MCP for browser-level verification:
-    - Use `browser_navigate` to load the target page
-    - Use `browser_snapshot` to capture the accessibility tree (preferred over screenshots for assertions)
-    - Use `browser_click` and `browser_fill_form` for interaction testing
-    - Use `browser_take_screenshot` for visual evidence
-* **Chrome DevTools MCP (Conditional)**: IF `mcp__chrome-devtools__take_snapshot` tool is available, use Chrome DevTools MCP for runtime diagnostics:
-    - Use `performance_start_trace` (with `reload: true, autoStop: true`) to capture Core Web Vitals and performance insights
-    - Use `list_console_messages` (filter by `types: ["error", "warn"]`) to detect runtime errors
-    - Use `list_network_requests` to verify API calls and detect failed requests
+* **Action**: Create/Run `tests/e2e/browser/test_{STORY_ID}_browser.py`.
+* **Playwright MCP (Conditional)**: IF Playwright MCP is available, use it for browser-level verification (navigation, snapshots, interactions).
+* **Chrome DevTools MCP (Conditional)**: IF Chrome DevTools MCP is available, use it for performance tracing and runtime diagnostics.
 
 ## Phase 5: The Verdict
 1.  **Run Suite**: Execute the specific test file created above (Story E2E test).
-2.  **Run Unit (Incremental)**: Run only unit tests related to changed modules, not the full suite.
-    - **Identify changed modules**: `git diff --name-only HEAD` to list modified source files.
-    - **Map to related tests**: Use `test_map_pattern` in `LANG_PROFILES` to find corresponding test files.
-    - **Run incremental**: Execute only the mapped test files.
-    - **Fallback**: If no test mapping can be determined, fall back to full `pytest tests/unit/`.
+2.  **Run Unit (Incremental)**: Use Test Mapping Protocol (see Shared Protocols) to run only tests related to changed modules. Fallback to full suite if no mapping.
 3.  **Report**: Output structured verdict:
 
 ```

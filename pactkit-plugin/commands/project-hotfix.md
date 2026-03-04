@@ -37,11 +37,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **No Side Effects**: Ensure the modification does not introduce new dependencies or change interface signatures.
 
 ## ✅ Phase 2: Verify
-1.  **Run Tests (Incremental)**: Run only tests related to changed modules to confirm no existing functionality is broken.
-    - **Identify changed modules**: `git diff --name-only HEAD` to list modified source files.
-    - **Map to related tests**: Use `test_map_pattern` in `LANG_PROFILES` to find corresponding test files.
-    - **Run incremental**: Execute only the mapped test files (e.g., `pytest tests/unit/test_foo.py -q`).
-    - **Fallback**: If no mapping can be determined, fall back to the full test suite (`pytest tests/ -q`).
+1.  **Run Tests (Incremental)**: Use Test Mapping Protocol (see Shared Protocols) to run only tests related to changed modules (e.g., `pytest tests/unit/test_foo.py -q`). Fallback to full suite if no mapping.
 2.  **On Failure**: If tests fail:
     - Output the failing test name and error message
     - **Do not auto-rollback** — let the user decide whether to continue

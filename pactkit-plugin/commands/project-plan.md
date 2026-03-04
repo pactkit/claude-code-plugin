@@ -64,12 +64,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 6.  **Output**: The enriched_input (original + answers) is used as context for Phase 1 onwards.
 
 ## 🎬 Phase 1: Archaeology (The "Know Before You Change" Step)
-1.  **Visual Scan**: Run `visualize` to see the module dependency graph.
-    - **Mode Selection**: Use `--mode class` for structure analysis, `--mode call` for logic modification, default for overview.
-    - **Large Codebase Heuristic**: If the project has more than 50 source files, use `--focus <module> --depth 2` instead of a full graph to avoid context window pollution.
+1.  **Visual Scan**: Run `visualize` to see the module dependency graph. Use `--mode class` for structure, `--mode call` for logic.
+    - For large codebases (50+ files), use `--focus <module> --depth 2` to limit scope.
 2.  **Logic Trace (CRITICAL)** — use pactkit-trace skill:
-    - If modifying existing logic, trace the current implementation:
-      Use `Grep` to locate entry points, then `visualize --mode call --entry <func>` to map call chains.
+    - If modifying existing logic, trace the current implementation.
     - *Goal*: Identify the exact function/class responsible for the logic.
 
 ## 🎬 Phase 2: Design & Impact
@@ -116,13 +114,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       ```
     - **Spec Lint Self-Check**: After writing the Spec, run `python3 src/pactkit/skills/spec_linter.py docs/specs/{ID}.md`. If ERROR rules fail, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until clean. This prevents the Spec from being rejected at Act Phase 0.5.
 2.  **Board**: Add Story using `add_story`.
-3.  **Memory MCP (Conditional)**: IF `mcp__memory__create_entities` tool is available, store the design context:
-    - Use `mcp__memory__create_entities` with: `name: "{STORY_ID}"`, `entityType: "story"`, `observations: [key architectural decisions, target files, design rationale]`
-    - IF this story depends on other stories, use `mcp__memory__create_relations` to record dependencies (e.g., `from: "{STORY_ID}", to: "STORY-XXX", relationType: "depends_on"`)
-4.  **Session Context Update**: Update `docs/product/context.md` to reflect the new Story:
-    - Read `docs/product/sprint_board.md` (now containing the new Story)
-    - Read `docs/architecture/governance/lessons.md` (last 5 entries)
-    - Run `git branch --list 'feature/*' 'fix/*'`
-    - Write `docs/product/context.md` using the standard format (see `/project-done` Phase 4.5 for format)
-    - Set "Last updated by" to `/project-plan`
+3.  **Memory MCP (Conditional)**: IF Memory MCP is available, use create_entities to store design context (decisions, target files, rationale) under entity `{STORY_ID}`. Record story dependencies if applicable.
+4.  **Session Context Update**: Update `docs/product/context.md` using the Context.md Canonical Format (see Shared Protocols). Set "Last updated by" to `/project-plan`.
 5.  **Handover**: "Trace complete. Spec created. Ready for Act."
