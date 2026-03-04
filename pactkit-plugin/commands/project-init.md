@@ -34,38 +34,9 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
     - If `go.mod` exists → `stack: go`
     - If `pom.xml` or `build.gradle` exists → `stack: java`
     - If none match → ask the user to specify
-4.  **Project CLAUDE.md**: Check/Create `./.claude/CLAUDE.md` if missing (do NOT overwrite if it already exists).
-    - *Purpose*: Project-level instructions for Claude Code (separate from global `~/.claude/CLAUDE.md`).
-    - *Venv Detection*: Check if a virtual environment exists (`.venv/`, `venv/`, or `env/` with `bin/python3`).
-    - *Content template*:
-      ```markdown
-      # {Project Name} — Project Context
-
-      {IF venv detected}
-      ## Virtual Environment
-      Always use the project's virtual environment:
-      - **Activate**: `source {venv_path}/bin/activate`
-      - **Python**: `{venv_path}/bin/python3`
-      - **Pytest**: `{venv_path}/bin/pytest`
-      - **Pip**: `{venv_path}/bin/pip`
-      {END IF}
-
-      ## Dev Commands
-
-      ```
-      # Run tests
-      {IF venv detected}{venv_path}/bin/{ELSE}{END IF}{test_runner from LANG_PROFILES}
-
-      # Lint
-      {lint_command from LANG_PROFILES}
-      ```
-
-      @./docs/product/context.md
-      ```
-    - Use the directory name as the project name.
-    - Fill `test_runner` and `lint_command` from `LANG_PROFILES` based on the detected language.
-    - If venv detected, prefix test commands with venv bin path (e.g., `.venv/bin/pytest`).
-    - The `@./docs/product/context.md` reference enables cross-session context loading.
+4.  **Project CLAUDE.md**: Check/Create `./.claude/CLAUDE.md` if missing (do NOT overwrite).
+    - Use the directory name as the project name. Fill test_runner and lint_command from the detected language stack in LANG_PROFILES.
+    - Include: venv instructions (if detected), dev commands, `@./docs/product/context.md` reference for cross-session context.
 
 ## 🎬 Phase 2: Architecture Governance
 1.  **Scaffold**: Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py init_arch`.
@@ -88,12 +59,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  **History**: Write `docs/architecture/governance/lessons.md`.
 
 ## 🎬 Phase 6: Session Context Bootstrap
-1.  **Generate Context**: Write `docs/product/context.md` with initial project state:
-    - Read `docs/product/sprint_board.md` (likely empty for new projects)
-    - Read `docs/architecture/governance/lessons.md` (last 5 entries)
-    - Run `git branch --list 'feature/*' 'fix/*'`
-    - Write `docs/product/context.md` using the standard format (see `/project-done` Phase 4.5 for format)
-    - Set "Last updated by" to `/project-init`
+1.  **Generate Context**: Write `docs/product/context.md` using the Context.md Canonical Format (see Shared Protocols). Set "Last updated by" to `/project-init`.
 
 ## 🎬 Phase 7: Handover
 1.  **Output**: "✅ PactKit Initialized. Reality Graph captured. Knowledge Base ready."
