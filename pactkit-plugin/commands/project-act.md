@@ -22,7 +22,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > **PURPOSE**: Non-AI structural validation — ensures "Spec is Law" has physical enforcement before any code is written.
 1.  **Run Linter**: Execute the Spec Linter on the current Story's spec:
     ```bash
-    python3 src/pactkit/skills/spec_linter.py docs/specs/{STORY_ID}.md
+    pactkit spec-lint docs/specs/{STORY_ID}.md
     ```
     Replace `{STORY_ID}` with the actual Story ID from `$ARGUMENTS` (e.g., `STORY-042`).
 2.  **If ERRORs found**: **STOP**. Output all ERROR and WARN items. Instruct the user:
