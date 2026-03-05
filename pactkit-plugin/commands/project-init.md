@@ -27,13 +27,16 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  **Generate Config**: Check if `./.claude/pactkit.yaml` exists.
     - **If missing**: Run `pactkit init` to generate complete configuration.
     - **If exists**: Run `pactkit update` to backfill any missing sections (preserves user customizations).
-3.  **Stack Detection** (auto-detected by `pactkit init`, or manual fallback):
-    - Valid values: `python`, `node`, `go`, `java`
-    - If `pyproject.toml` or `requirements.txt` or `setup.py` exists → `stack: python`
-    - If `package.json` exists → `stack: node`
-    - If `go.mod` exists → `stack: go`
-    - If `pom.xml` or `build.gradle` exists → `stack: java`
-    - If none match → ask the user to specify
+3.  **Stack Detection** (config-first, then file-based fallback):
+    - **Config-first**: If `.claude/pactkit.yaml` exists and has a `stack` value set (including `auto`), use that value and skip file-based detection.
+    - **File-based detection** (only if no config value):
+      - Valid values: `python`, `node`, `go`, `java`, `auto`
+      - If `pyproject.toml` or `requirements.txt` or `setup.py` exists → `stack: python`
+      - If `package.json` exists → `stack: node`
+      - If `go.mod` exists → `stack: go`
+      - If `pom.xml` or `build.gradle` exists → `stack: java`
+    - **Safe fallback**: If none match and no config exists, default to `stack: auto` and print warning: "⚠️ No stack detected, defaulting to auto. You can set `stack:` in `.claude/pactkit.yaml` later."
+    - Do NOT block on user input for stack selection mid-flow.
 4.  **Project CLAUDE.md**: Check/Create `./.claude/CLAUDE.md` if missing (do NOT overwrite).
     - Use the directory name as the project name. Fill test_runner and lint_command from the detected language stack in LANG_PROFILES.
     - Include: venv instructions (if detected), dev commands, `@./docs/product/context.md` reference for cross-session context.
