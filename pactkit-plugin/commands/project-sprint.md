@@ -13,15 +13,17 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## Phase 0: Setup
 1. Parse requirement from `$ARGUMENTS`. Determine next STORY-ID via Glob on `docs/specs/`.
 2. `TeamCreate("sprint-{STORY_ID}")`.
-3. `TaskCreate` for each stage: Build (no deps), Check-QA (blockedBy: Build), Check-Security (blockedBy: Build), Close (blockedBy: both Checks).
+3. `TaskCreate` for each stage: Plan (no deps), Act (blockedBy: Plan), Check-QA (blockedBy: Act), Check-Security (blockedBy: Act), Close (blockedBy: both Checks).
 4. Verify worktree support (`git worktree list`). Use `isolation="worktree"` if supported.
+5. Read `.claude/pactkit.yaml`, extract `agent_models`: `plan_model=agent_models.get('system-architect','opus')`, `act_model=agent_models.get('senior-developer','sonnet')`. Default: fallback to `sonnet` if model unavailable.
 
 ## Phase 1: PDCA Execution
 
-### Stage A: Build (Plan + Act merged)
-- Launch `system-architect` with worktree isolation.
-- Prompt: Execute `commands/project-plan.md` then `commands/project-act.md` for {STORY_ID}. Report "BUILD PASS" or "BUILD FAIL: reason".
-- On completion: merge worktree branch, verify Spec exists. On failure: STOP.
+### Stage A: Build
+
+**A1** (`system-architect`, model: opus, isolation="worktree"): Execute `commands/project-plan.md`. Verify Spec. STOP on failure.
+
+**A2** (`senior-developer`, model: sonnet, isolation="worktree"): Execute `commands/project-act.md`. Merge worktree. STOP on failure.
 
 ### Stage B: Check (PARALLEL — launch both in ONE message)
 - Launch `qa-engineer` (model: sonnet, isolation="worktree"): Execute `commands/project-check.md`. Report "QA PASS/FAIL".
@@ -45,7 +47,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## Subagent Reference
 | Stage | subagent_type | Model | Playbook |
 |-------|--------------|-------|----------|
-| Build (Plan+Act) | system-architect | default (Opus) | project-plan.md + project-act.md |
+| Plan | system-architect | opus (agent_models) | project-plan.md |
+| Act  | senior-developer | sonnet (agent_models) | project-act.md |
 | Check-QA | qa-engineer | sonnet | project-check.md |
 | Check-Security | security-auditor | sonnet | (inline OWASP audit) |
 | Close | repo-maintainer | sonnet | project-done.md |

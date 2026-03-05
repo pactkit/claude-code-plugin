@@ -118,7 +118,7 @@ Assign each Story to a horizon:
       - `## Requirements` — using RFC 2119 keywords (MUST/SHOULD/MAY)
       - `## Acceptance Criteria` — Given/When/Then scenarios
       - Add Priority Score to the spec header: `- **Priority**: {score} (Impact {I} / Effort {E})`
-4.  **Spec Lint Self-Check**: After each Spec is generated, run `python3 src/pactkit/skills/spec_linter.py docs/specs/{STORY_ID}.md`. If ERRORs found, self-correct and re-run until clean. This prevents malformed Specs from blocking the Sprint pipeline at Act Phase 0.5.
+4.  **Spec Lint Self-Check**: After each Spec is generated, run `pactkit spec-lint docs/specs/{STORY_ID}.md`. If ERRORs found, self-correct and re-run until clean. This prevents malformed Specs from blocking the Sprint pipeline at Act Phase 0.5.
 5.  **Dependency Graph**: Add a Mermaid dependency graph at the end of the PRD showing Story execution order and critical path.
 
 ## 🎬 Phase 4: Board Setup
