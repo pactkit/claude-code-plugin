@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v1.6.8 Modular)
+# PactKit Global Constitution (v1.6.9 Modular)
 
 # Core Protocol
 
