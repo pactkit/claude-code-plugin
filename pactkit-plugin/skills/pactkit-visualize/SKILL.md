@@ -7,7 +7,7 @@ description: "Generate project code dependency graph (Mermaid), supporting file-
 
 Generate project code relationship graphs (Mermaid format), supporting three analysis modes.
 
-> **Script location**: Use the base directory from the skill invocation header to resolve script paths. Classic deployment: `${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py`
+> **Script location**: Use the base directory from the skill invocation header to resolve script paths.
 
 ## Prerequisites
 - The project must have Python source files (`.py`) to generate meaningful graphs

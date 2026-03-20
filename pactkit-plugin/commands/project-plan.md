@@ -8,6 +8,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - **Agent**: System Architect
 
 ## 🧠 Phase 0: The Thinking Process (Mandatory)
+> **Tool Integration Note**: If the request involves adapting PactKit to a new AI coding tool (new `format` value like `codex`, `cursor`, etc.), **always start** by consulting `docs/guides/tool-integration-checklist.md`. Complete Dimension 0 (capability matrix) before writing any code. See also `docs/guides/codex-integration-preresearch.md` for an example pre-research template.
+
 1.  **Analyze Intent**: New feature (Expansion) or Bugfix/Refactor (Modification)?
 2.  **Strategy**:
     - If **New Feature**: Focus on `system_design.mmd` (Architecture).
@@ -22,7 +24,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🛡️ Phase 0.5: Init Guard (Auto-detect)
 > **INSTRUCTION**: Check if the project has been initialized before proceeding.
 1.  **Check Markers**: Verify the existence of ALL three:
-    - `.claude/pactkit.yaml` (project-level config)
+    - `{PACTKIT_YAML}` (project-level config)
     - `docs/product/sprint_board.md` (sprint board)
     - `docs/architecture/graphs/` (architecture graph directory)
 2.  **If ANY marker is missing**:
@@ -76,12 +78,27 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - *Rule*: Keep the `code_graph.mmd` as is (it updates automatically).
 
 ## 🎬 Phase 3: Deliverables
-1.  **Spec**: Create `docs/specs/{ID}.md` detailing the *Change*.
+1.  **Story ID Generation** (STORY-072):
+    - Read `developer` from `pactkit.yaml` (check `{PACTKIT_YAML}`).
+    - If `developer` has a value (e.g., `alice`): use ID format `STORY-{developer}-{NNN}` (e.g., `STORY-alice-001`).
+    - If `developer` is empty or missing: use ID format `STORY-{NNN}` (backward compatible).
+    - NNN: scan `docs/specs/` for existing files with the same prefix, find the max number, increment by 1.
+2.  **Spec**: Create `docs/specs/{ID}.md` detailing the *Change*.
+    - **MUST — Metadata Table**: Include a metadata table at the top of the Spec using this EXACT format:
+      ```markdown
+      | Field | Value |
+      |-------|-------|
+      | ID | {ID} |
+      | Status | Draft |
+      | Priority | P2 |
+      | Release | {version} |
+      ```
+      Field names MUST be exact case (ID, Status, Priority, Release) — not bold, not different names.
     - *Requirement*: Include a "Target Call Chain" section in the Spec based on your Trace findings.
     - **MUST**: Fill in the `## Requirements` section using RFC 2119 keywords (MUST/SHOULD/MAY).
     - **MUST**: Fill in the `## Acceptance Criteria` section with Given/When/Then scenarios.
     - Each Scenario SHOULD map to a verifiable test case in `docs/test_cases/`.
-    - **MUST**: Fill in the `Release` metadata field by reading the `version` field from `.claude/pactkit.yaml` (or `pyproject.toml`). Use that EXACT value — do NOT increment or predict a future version. If the file cannot be read, use `TBD`.
+    - **MUST**: Fill in the `Release` metadata field by reading the `version` field from `{PACTKIT_YAML}` or `pyproject.toml`. Use that EXACT value — do NOT increment or predict a future version. If the file cannot be read, use `TBD`.
     - **OPTIONAL — Implementation Steps**: If Phase 1 Trace identifies 2+ files to modify, add `## Implementation Steps` section with table format:
       ```
       | Step | File | Action | Dependencies | Risk |

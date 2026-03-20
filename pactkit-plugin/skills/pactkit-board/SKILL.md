@@ -7,7 +7,7 @@ description: "Sprint Board atomic operations: add Story, update Task, archive co
 
 Atomic operations tool for Sprint Board (`docs/product/sprint_board.md`).
 
-> **Script location**: Use the base directory from the skill invocation header to resolve script paths. Classic deployment: `${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py`
+> **Script location**: Use the base directory from the skill invocation header to resolve script paths.
 
 ## Prerequisites
 - `docs/product/sprint_board.md` must exist (created by `/project-init`)
