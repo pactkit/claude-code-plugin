@@ -121,19 +121,22 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 2.  **Action**: If yes, run `{BOARD_CMD} archive`.
 3.  **Result**: Completed stories are moved to `docs/product/archive/archive_YYYYMM.md`.
 
-## 🎬 Phase 3.5.5: Issue Tracker Verification (Backfill Safety Net)
-> **Purpose**: Verify GitHub Issue exists for the Story; create backfill if Plan phase was skipped.
-1.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
-2.  **If `provider: none` or section missing**: Skip silently, proceed to Phase 3.6.
-3.  **If `provider: github`**:
+## 🎬 Phase 3.5.5: Issue Tracker Verification (BUG/HOTFIX Only)
+> **Purpose**: Verify GitHub Issue exists for BUG/HOTFIX items; STORY items are NOT synced to protect IP.
+1.  **Check Item Type**: Parse the current item ID (e.g., `STORY-001`, `BUG-001`, `HOTFIX-001`).
+    - **If STORY-***: Skip this phase entirely. Print: "ℹ️ Issue sync skipped for STORY (IP protection)". Proceed to Phase 3.6.
+    - **If BUG-* or HOTFIX-***: Continue with issue verification.
+2.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
+3.  **If `provider: none` or section missing**: Skip silently, proceed to Phase 3.6.
+4.  **If `provider: github`**:
     a. **CLI Check**: Run `gh --version`. If unavailable, print warning "Issue tracker verification skipped: gh CLI unavailable" and proceed to Phase 3.6.
-    b. **Search**: Run `gh issue list --search "{STORY_ID}" --state all --json number,title,url` to find existing issue.
+    b. **Search**: Run `gh issue list --search "{ITEM_ID}" --state all --json number,title,url` to find existing issue.
     c. **If issue found**:
        - Check if Sprint Board entry has issue link (e.g., `[#N](url)`)
        - If no link: update Sprint Board entry to include `[#{number}]({url})`
        - Proceed to Phase 3.6 for closure
     d. **If issue NOT found (Backfill)**:
-       - Create issue: `gh issue create --title "{STORY_ID}: {Story Title}" --body "Spec: docs/specs/{STORY_ID}.md
+       - Create issue: `gh issue create --title "{ITEM_ID}: {Item Title}" --body "Spec: docs/specs/{ITEM_ID}.md
 
 **Status**: Backfilled during Done phase"`
        - Parse the returned issue URL
@@ -141,14 +144,15 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
        - Proceed to Phase 3.6 for closure
     e. **If any gh command fails**: Print warning with error message, continue to Phase 3.6.
 
-## 🎬 Phase 3.6: Issue Tracker Closure (Conditional)
-> **Purpose**: Close linked external issues when the Story is done.
-1.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
-2.  **If `provider: github`**:
+## 🎬 Phase 3.6: Issue Tracker Closure (BUG/HOTFIX Only)
+> **Purpose**: Close linked external issues when BUG/HOTFIX is done. STORY items are skipped.
+1.  **Check Item Type**: If current item is `STORY-*`, skip this phase silently.
+2.  **Check Config**: Read `pactkit.yaml` for `issue_tracker.provider`.
+3.  **If `provider: github`**:
     - Parse the Sprint Board entry for a linked issue URL (e.g., `[#123](https://github.com/...)`)
     - If found: run `gh issue close <number> --comment "Completed in $(git rev-parse --short HEAD)"`
     - If `gh` CLI unavailable or closure fails: print warning, continue
-3.  **If `provider: none` or section missing**: Skip silently.
+4.  **If `provider: none` or section missing**: Skip silently.
 
 ## 🎬 Phase 4: Git Commit
 0.  **Enterprise Check**: If `enterprise.no_git: true` in `pactkit.yaml`, skip ALL git operations in this phase. Print: "ℹ️ Git operations disabled (enterprise.no_git)". Skip to the Session Context Update phase.
@@ -157,6 +161,11 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 3.  **Post-Commit Prompts**:
     - **Version bump?** If `pyproject.toml` version was changed in this Story: "ℹ️ Version bump detected. Run `/project-release` to create snapshot and git tag."
     - **Feature branch?** If current branch is not `main`/`master`: "ℹ️ Working on a feature branch. Run `/project-pr` to push and create a pull request."
+    - **CI Status Check (Conditional)**: If `ci.provider` is `github` in `pactkit.yaml` and `gh` CLI is available:
+      1. After push, run `gh run list --limit 1 --json status,name,databaseId` to check the latest workflow run.
+      2. Report: `CI: [pass/fail/pending] — {workflow_name} #{run_id}`
+      3. If CI fails, print a warning but do NOT block the Done flow.
+      4. If `gh` CLI is unavailable or command fails, skip silently.
 
 ## 🎬 Phase 4.5: Session Context Update
 > **Purpose**: Generate `docs/product/context.md` so the next session auto-loads project state.
