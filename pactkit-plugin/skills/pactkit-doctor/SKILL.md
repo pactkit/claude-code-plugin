@@ -36,7 +36,7 @@ Diagnostic tool for project health — config drift, missing files, stale graphs
 - Suggest: "Run `/project-plan` to create missing specs."
 
 ### 4. Configuration Drift Detection
-- Compare `pactkit.yaml` against deployed files in `.claude/`:
+- Compare `pactkit.yaml` (in `.claude/` or `.opencode/`) against deployed files:
   - Check if enabled agents match deployed agent files.
   - Check if enabled rules match deployed rule files.
   - Check if enabled skills match deployed skill directories.
@@ -44,7 +44,7 @@ Diagnostic tool for project health — config drift, missing files, stale graphs
 - Suggest: "Run `pactkit update` to sync configuration."
 
 ### 5. Infrastructure & Data
-- Verify `.claude/pactkit.yaml` exists and is valid.
+- Verify `pactkit.yaml` exists (in `.claude/pactkit.yaml` or `.opencode/pactkit.yaml`) and is valid.
 - Check Specs vs Board linkage (every board story should have a spec).
 - Check if `tests/e2e/` is empty.
 

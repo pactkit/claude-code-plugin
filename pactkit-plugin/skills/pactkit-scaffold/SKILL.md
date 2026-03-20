@@ -7,7 +7,7 @@ description: "File scaffolding: create Spec, test files, E2E tests, Git branches
 
 Project file scaffolding tool for quickly creating standardized project files.
 
-> **Script location**: Use the base directory from the skill invocation header to resolve script paths. Classic deployment: `${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py`
+> **Script location**: Use the base directory from the skill invocation header to resolve script paths.
 
 ## Prerequisites
 - `docs/specs/` directory must exist (required by `create_spec`)

@@ -50,7 +50,7 @@ Classify changed files using `LANG_PROFILES[stack].source_dirs` and `file_ext`:
 2. **Identify changed functions**: Use `git diff HEAD~1 --unified=0` on changed source files to extract modified function names (look for `def ` in the diff).
 3. **Run impact command** for each changed function:
    ```bash
-   python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py impact --entry <func_name>
+   {VISUALIZE_CMD} impact --entry <func_name>
    ```
    Collect all returned test file paths (space-separated).
 4. **Deduplicate** the collected test paths.
@@ -107,7 +107,7 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 3.  **Lessons Auto-append (MANDATORY)**: Append a lesson to `docs/architecture/governance/lessons.md` if it passes these two checks:
     - **Specific?** Does the lesson reference a concrete file, function, or pattern? (Not just a generic principle)
     - **Non-duplicate?** Is it meaningfully different from the last 5 entries in `lessons.md`?
-    - If both yes: append row with format: `| {YYYY-MM-DD} | {one-line summary} | {STORY_ID} |`
+    - If both yes: append row using format `{LESSONS_ROW_FORMAT}` where date=YYYY-MM-DD, context={STORY_ID}
     - If either no: skip with log: `"Lesson skipped: {reason}"`
 4.  **Invariants Refresh (MANDATORY)**: Update the Invariants section in `docs/architecture/governance/rules.md`:
     - Read the current `rules.md` file.
@@ -118,7 +118,7 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 
 ## 🎬 Phase 3.5: Archive (Optional)
 1.  **Check**: Are all tasks for the current Story marked `[x]`?
-2.  **Action**: If yes, run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py archive`.
+2.  **Action**: If yes, run `{BOARD_CMD} archive`.
 3.  **Result**: Completed stories are moved to `docs/product/archive/archive_YYYYMM.md`.
 
 ## 🎬 Phase 3.5.5: Issue Tracker Verification (Backfill Safety Net)
@@ -160,5 +160,7 @@ IF `pytest-cov` is available, run tests with coverage on changed source files:
 
 ## 🎬 Phase 4.5: Session Context Update
 > **Purpose**: Generate `docs/product/context.md` so the next session auto-loads project state.
-1.  **Write Context**: Update `docs/product/context.md` using the Context.md Canonical Format (see Shared Protocols). Include sections: Sprint Status, Recent Completions, Active Branches, Key Decisions, Next Recommended Action. Set "Last updated by" to `/project-done`.
+1.  **Write Context**: Update `docs/product/context.md` with the following required sections (from `schemas.CONTEXT_SECTIONS`):
+{CONTEXT_SECTIONS}
+    Set "Last updated by" to `/project-done`.
 2.  **Commit Context**: `git add docs/product/context.md && git commit --amend --no-edit` to include context.md in the commit.

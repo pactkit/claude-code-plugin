@@ -15,7 +15,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 2. `TeamCreate("sprint-{STORY_ID}")`.
 3. `TaskCreate` for each stage: Plan (no deps), Act (blockedBy: Plan), Check-QA (blockedBy: Act), Check-Security (blockedBy: Act), Close (blockedBy: both Checks).
 4. Verify worktree support (`git worktree list`). Use `isolation="worktree"` if supported.
-5. Read `.claude/pactkit.yaml`, extract `agent_models`: `plan_model=agent_models.get('system-architect','opus')`, `act_model=agent_models.get('senior-developer','sonnet')`. Default: fallback to `sonnet` if model unavailable.
+5. Read `pactkit.yaml` (check `{PACTKIT_YAML}`), extract `agent_models`: `plan_model=agent_models.get('system-architect','opus')`, `act_model=agent_models.get('senior-developer','sonnet')`. Default: fallback to `sonnet` if model unavailable.
 
 ## Phase 1: PDCA Execution
 

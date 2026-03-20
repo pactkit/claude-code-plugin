@@ -1,15 +1,16 @@
-# PactKit Global Constitution (v1.6.9 Modular)
+# PactKit Global Constitution (v2.1.1 Modular)
 
 # Core Protocol
 
 ## Session Context
 On new session, read `docs/product/context.md` to understand project state before taking action.
 If the file is missing, suggest `/project-init` to bootstrap the project.
+If "Last updated" date is before today, suggest running `$daily-retro`.
 
 ## Visual First
-Understand the current state before modifying code:
-- Run `visualize` to view the module dependency graph (mandatory before modification)
-- Run `visualize --mode class` to view class inheritance relationships
+Before modifying code:
+- Run `visualize` to view module dependency graph
+- Run `visualize --mode class` for class inheritance
 - Run `visualize --mode call --entry <func>` to trace call chains
 
 ## Strict TDD
@@ -269,5 +270,78 @@ Write `docs/product/context.md` using this format:
 ## Next Recommended Action
 {If In Progress: `/project-act STORY-XXX` | If Backlog only: `/project-plan` | If empty: `/project-design`}
 ```
+
+# Architecture Principles
+
+> Derived from SOLID, DRY, 12-Factor App, and Defense-in-Depth practices.
+> Violations of MUST rules are treated as bugs. SHOULD rules are advisory.
+
+## 1. Single Source of Truth (DRY)
+- Every configuration value, schema definition, or structural rule MUST be defined in exactly one place.
+- Canonical locations:
+  - Environment paths/capabilities → `profiles.py` (`FormatProfile`)
+  - Document structure rules → `schemas.py` (`SPEC_REQUIRED_SECTIONS`, `BOARD_SECTIONS`, `CONTEXT_SECTIONS`, etc.)
+  - Valid component sets → `config.py` (`VALID_AGENTS`, `VALID_COMMANDS`, `VALID_SKILLS`, `VALID_RULES`)
+- When standalone scripts (board.py, scaffold.py) cannot import the library, they MUST inline the value with a comment pointing to the canonical source:
+  ```python
+  # Canonical: src/pactkit/schemas.py BOARD_SECTION_BACKLOG
+  _BACKLOG = '## 📋 Backlog'
+  ```
+- When updating a canonical value, search all inline copies with `grep` and update them in the same commit.
+
+## 2. Open-Closed Principle (OCP)
+- Adding a new tool format (e.g., `codex`, `cursor`) MUST NOT require modifying existing functions.
+- Pattern: add a new `FormatProfile` entry to `FORMAT_PROFILES` in `profiles.py`. All downstream code (`deployer`, `config`, `CLI`) auto-picks it up.
+- Adding a new document type MUST only require adding constants to `schemas.py` and an entry to `SCHEMA_REGISTRY`.
+
+## 3. Dependency Inversion (DIP)
+- Prompt templates MUST NOT contain hardcoded environment-specific paths.
+- Pattern: use named placeholders (`{SKILLS_ROOT}`, `{BOARD_CMD}`, `{PACTKIT_YAML}`) resolved at deploy time by `_render_prompt(template, profile)`.
+- Functions MUST accept a `profile: FormatProfile` parameter instead of format-specific booleans (`opencode_format=True`) or manual path strings (`skills_prefix="~/.config/opencode/skills"`).
+
+## 4. Liskov Substitution (LSP) — Deploy Chain Parity
+- All environment-format deploy functions (`_deploy_classic`, `_deploy_opencode`, `_deploy_codex`) MUST support the same user-facing feature set:
+  - Selective deployment (read `pactkit.yaml`)
+  - Auto-merge on upgrade (`auto_merge_config_file`)
+  - Legacy cleanup (`_cleanup_legacy`)
+  - Project-level instructions file generation
+- Format-specific features (e.g., hooks for Claude Code, opencode.json for OpenCode) are extensions, not omissions.
+
+## 5. Interface Segregation (ISP)
+- Each `FormatProfile` exposes only the fields relevant to that format:
+  - `commands_dir = None` for formats without custom commands (Codex)
+  - `excluded_agent_fields` removes fields invalid for that format
+- Consumers MUST check `if profile.has_custom_commands` before deploying commands — not `if format != "codex"`.
+
+## 6. Defense-in-Depth (Security)
+- **Path traversal**: All file writes use `atomic_write()` which creates parent directories safely.
+- **Config isolation**: `_generate_config_if_missing(format=)` writes to the format-specific directory only. Never cross-write.
+- **No secret leakage**: `config.toml` merge (Codex) MUST NOT copy user API keys. `_render_prompt()` variables are all path-based, never credential-based.
+- **Standalone script safety**: Skill scripts (board.py, scaffold.py) MUST NOT execute arbitrary imports. Use `try/except ImportError` fallback for pactkit imports.
+
+## 7. Template Rendering Safety
+- Use sequential `str.replace()` in `_render_prompt()` — NOT `str.format_map()` or f-strings.
+  - Reason: prompt templates contain user-facing complex keys like `{R1, R2, ...}`, `{score}`, `{NNN}` that cause `ValueError: Empty attribute` in Python's format parser.
+- JSON literals in templates (`{"key": "value"}`) are naturally safe with sequential replacement — no escaping needed.
+- When converting f-string prompt constants to template strings, add legacy variables (e.g., `{M}` for backticks) to the `_render_prompt` var_map.
+
+## 8. Schema Consistency Gate
+- Every document type with a structure schema in `schemas.py` SHOULD have a corresponding linter/validator.
+- Currently enforced:
+  - Spec → `spec_linter.py` (E001-E008, W001-W005) — **blocks /project-act**
+  - Board → `board.py` regex parsing — **runtime enforcement**
+- Currently advisory only:
+  - context.md, lessons.md, test_case → referenced in playbook text via `{CONTEXT_SECTIONS}`, `{LESSONS_ROW_FORMAT}`
+- When adding a new schema to `schemas.py`, consider whether it needs a linter gate or if prompt-level enforcement is sufficient.
+
+## Quick Reference: Where to Make Changes
+
+| Change Type | File to Edit | Auto-Propagation |
+|-------------|-------------|------------------|
+| New tool format | `profiles.py` → `FORMAT_PROFILES` | CLI, deployer, config, VALID_FORMATS |
+| New document type | `schemas.py` → `SCHEMA_REGISTRY` | `pactkit schema`, playbooks via render_prompt |
+| New template variable | `deployer.py` → `_render_prompt()` var_map | All deployed prompts |
+| New spec rule | `schemas.py` + `spec_linter.py` | scaffold, playbooks |
+| New prompt placeholder | `profiles.py` (if env-specific) or `schemas.py` (if doc-specific) | `_render_prompt()` |
 
 > **TIP**: Run `/project-init` to set up project governance and enable cross-session context.

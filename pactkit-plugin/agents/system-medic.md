@@ -27,7 +27,7 @@ Health check report, format:
 | Tests | ✅/❌ | ... |
 
 ## Protocol (pactkit-doctor skill)
-1. **Config**: Verify that the `${CLAUDE_PLUGIN_ROOT}/skills/` directory and SKILL.md files are complete
+1. **Config**: Verify that the `{SKILLS_ROOT}/` directory and SKILL.md files are complete
 2. **Graphs**: Run `visualize` to check whether architecture graphs can be generated
 3. **Data**: Verify that Specs and Board Stories correspond
 4. **Tests**: Check whether the project's test suite can run (see `LANG_PROFILES`)
