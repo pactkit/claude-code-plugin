@@ -7,7 +7,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 - **Usage**: `/project-init`
 - **Agent**: System Architect
 
-## 🧠 Phase 0: The Thinking Process (Mandatory)
+## 🧠 Phase 0: The Thinking Process
 1.  **Environment Check**: Is this a fresh folder or legacy project?
 2.  **Compliance**: Does the user need `pactkit.yaml`?
 3.  **Strategy**: If legacy, I must prioritize `visualize` to capture Reality.
@@ -90,7 +90,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  **History**: Write `docs/architecture/governance/lessons.md`.
 
 ## 🎬 Phase 6: Session Context Bootstrap
-1.  **Generate Context**: Write `docs/product/context.md` using the Context.md Canonical Format (see Shared Protocols). Set "Last updated by" to `/project-init`.
+1.  **Generate Context**: Run `pactkit context` to generate `docs/product/context.md`. Set "Last updated by" to `/project-init`.
 
 ## 🎬 Phase 7: Handover
 1.  **Output**: "✅ PactKit Initialized. Reality Graph captured. Knowledge Base ready."

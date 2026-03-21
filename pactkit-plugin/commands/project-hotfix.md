@@ -20,16 +20,16 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - ❌ New feature development → use `/project-plan` + `/project-act`
 - ❌ Multi-module refactoring → use `/project-plan` + `/project-act`
 
-## 🧠 Phase 0: Locate & Register (Mandatory)
+## 🧠 Phase 0: Locate & Register
 1.  **Parse**: Understand what needs to be fixed from `$ARGUMENTS`.
 2.  **Locate**: Use `Grep` or `Glob` to quickly locate the target file and code line.
 3.  **Assess**: Confirm this is a minor fix (suitable for Hotfix), not a change requiring full PDCA.
     - If the assessment reveals a complex change, **proactively suggest the user switch to** `/project-plan`.
-4.  **Assign HOTFIX- ID**: Scan `docs/specs/` for existing `HOTFIX-*.md` files, determine the next available number (e.g., `HOTFIX-001`, `HOTFIX-002`).
+4.  **Assign HOTFIX-ID**: Run `pactkit next-id` to get the next STORY number, then use HOTFIX-{developer}-{NNN} pattern (e.g., HOTFIX-slim-001). The numeric part should match the next-id output.
 5.  **Create Spec**: Create a lightweight Spec at `docs/specs/HOTFIX-{NNN}.md` with:
     - Title, Background (one sentence), Target file/line, and what was fixed.
 6.  **Add Board Entry**: Add the hotfix to the Board:
-    - `python3 {BOARD_CMD} add_story HOTFIX-{NNN} "Short title" "Fix description"`
+    - `{BOARD_CMD} add_story HOTFIX-{NNN} "Short title" "Fix description"`
 
 ## 🔧 Phase 1: Fix
 1.  **Fix**: Use `Edit` or `Write` to directly fix the target code.
@@ -37,8 +37,9 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **No Side Effects**: Ensure the modification does not introduce new dependencies or change interface signatures.
 
 ## ✅ Phase 2: Verify
-1.  **Run Tests (Incremental)**: Use Test Mapping Protocol (see Shared Protocols) to run only tests related to changed modules (e.g., `pytest tests/unit/test_foo.py -q`). Fallback to full suite if no mapping.
-2.  **On Failure**: If tests fail:
+1.  **Run Tests (Incremental)**: Run `pactkit test-map <changed-files>` to find related test files, then run only those tests (e.g., `pytest tests/unit/test_foo.py -q`). Fallback to full suite if no mapping.
+2.  **Run Lint**: Run `pactkit lint` to verify no lint errors in changed files. If `pactkit lint` is unavailable, fall back to the stack's lint command directly.
+3.  **On Failure**: If tests or lint fail:
     - Output the failing test name and error message
     - **Do not auto-rollback** — let the user decide whether to continue
     - Suggestion: check whether the fix is correct, or switch to `/project-act` for the full workflow
@@ -50,7 +51,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 2.  **Confirm**: **Must ask the user for confirmation** before executing `git commit`.
     - Output: "Suggested commit: `fix(scope): description`. Confirm commit?"
 3.  **Execute**: After user confirmation, execute git add + git commit.
-4.  **Update Board**: Mark the hotfix task as done on the Board.
+4.  **Update Board**: Run `{BOARD_CMD} update_task HOTFIX-{NNN} "Task Name"` for each task to mark it done.
+
+## 📋 Phase 3.5: Session Context Update
+1.  **Update Context**: Run `pactkit context` to regenerate `docs/product/context.md`. Set "Last updated by" to `/project-hotfix`.
 
 ## 🚫 What This Command Does NOT Do
 - Does not require writing tests before code (no TDD)

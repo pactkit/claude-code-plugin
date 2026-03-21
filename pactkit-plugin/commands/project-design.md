@@ -11,7 +11,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > implementable Specs, and populate the Sprint Board — bridging the gap between
 > "I have an idea" and "I have a prioritized backlog ready for `/project-sprint`."
 
-## 🧠 Phase 0: The Thinking Process (Mandatory)
+## 🧠 Phase 0: The Thinking Process
+> **Execution Style**: Work through each phase incrementally — output progress as you go. Do NOT try to plan all PRD sections in your head before producing output. Start each section, show your findings, then move to the next.
 1.  **Parse Vision**: What is the core product idea? What problem does it solve?
 2.  **Identify Domain**: E-commerce, SaaS, internal tool, mobile app, CLI, etc.
 3.  **Detect Stack Hints**: Does the user mention specific technologies? (React, Python, Go, etc.)
@@ -21,7 +22,9 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > **Goal**: Create `docs/product/prd.md` — the single source of truth for the product.
 
 1.  **Scaffold**: Run `{SCAFFOLD_CMD} create_prd "{ProductName}"`.
-2.  **Fill Sections** — Complete each section in the PRD:
+2.  **Fill Sections** — Complete each section in the PRD. Work through 3 groups, outputting progress after each:
+
+### Group A: Product Foundation (Sections 1.1-1.2)
 
 ### 1.1 Product Overview
 - **Vision**: One-sentence product vision statement
@@ -37,6 +40,8 @@ For each persona, fill:
   - *Functional*: What task are they trying to accomplish?
   - *Emotional*: How do they want to feel?
   - *Social*: How do they want to be perceived?
+
+### Group B: Features & Design (Sections 1.3-1.6)
 
 ### 1.3 Feature Breakdown (Epics → Stories)
 Organize features into Epics. For each Story within an Epic, score:
@@ -77,6 +82,8 @@ For each key screen:
     - Call `lucide.createIcons()` at the end of `<body>` to render icons
 4.  **Browser Preview (Conditional)**: IF `mcp__playwright__browser_navigate` tool is available, open each prototype in the browser for live preview. IF Playwright MCP is not available, print the file path for manual opening.
 
+### Group C: Technical & Strategy (Sections 1.7-2.0)
+
 ### 1.7 API Design
 - List endpoints: `METHOD /path → description`
 - Define core data models (entity fields and relationships)
@@ -110,7 +117,7 @@ Assign each Story to a horizon:
 ## 🎬 Phase 3: Story Decomposition
 > **Goal**: Convert PRD Feature Breakdown into individual Specs.
 
-1.  **Determine STORY IDs**: Scan `docs/specs/` to find the next available STORY-NNN number.
+1.  **Determine STORY IDs**: Run `pactkit next-id` to get the next available STORY-NNN number.
 2.  **Sort**: Order stories by horizon (Now → Next → Later), then by Priority Score (descending).
 3.  **For each Story**:
     - Run `{SCAFFOLD_CMD} create_spec "STORY-{NNN}" "{title}"`.
@@ -125,6 +132,9 @@ Assign each Story to a horizon:
 1.  **Add Stories**: For each Story (ordered by horizon → priority):
     - Run `{BOARD_CMD} add_story "STORY-{NNN}" "{title}" "{task list}"`.
 2.  **Verify**: Read `docs/product/sprint_board.md` to confirm all stories are listed.
+
+## 🎬 Phase 4.5: Session Context Update
+1.  **Update Context**: Run `pactkit context` to regenerate `docs/product/context.md` with the newly created stories and board state.
 
 ## 🎬 Phase 5: Handover
 1.  **Summary Table**: Output a table of all created artifacts:

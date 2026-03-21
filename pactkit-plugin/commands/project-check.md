@@ -18,7 +18,8 @@ allowed-tools: [Read, Bash, Grep, Glob]
 | **P2** | Medium | Fix or follow-up — code smell, maintainability concern |
 | **P3** | Low | Optional — style, naming, minor suggestion |
 
-## Phase 0: The Thinking Process (Mandatory)
+## Phase 0: The Thinking Process
+> **Execution Style**: Work through each phase incrementally — output progress as you go.
 1.  **Analyze Context**: Read the active `docs/specs/{ID}.md`.
 2.  **Determine Layer**:
     * *Logic Only?* -> Strategy: **API Level**.
@@ -27,7 +28,7 @@ allowed-tools: [Read, Bash, Grep, Glob]
 4.  **Gap Analysis**: Do we have a structured Test Case? If not, plan to create one.
 5.  **Security Scope**: Check if the Spec contains a `## Security Scope` section.
     - If present: parse the `Applicable` column for each SEC-* check. Pass this scope to Phase 1.
-    - If absent (legacy Spec): fall back to running all 8 checks (backward compatible).
+    - If absent (legacy Spec): run `pactkit sec-scope <changed-files>` to auto-detect, or fall back to all 8 checks.
 
 ## Phase 1: Security Scan (OWASP+)
 > **Config**: If `pactkit.yaml` contains `check.security_checklist: false`, skip this phase and log: "Security checklist disabled via config".
@@ -71,15 +72,16 @@ Apply a code quality checklist to all code related to the Story:
 For each finding, assign a severity (P0-P3). Flag issues that may cause silent failures.
 
 ## Phase 3: Spec Verification & Test Case Definition (The Law)
-1.  **Verify Spec Structure**: Read `docs/specs/{STORY_ID}.md`.
-    * *Check*: Does the Spec contain `## Acceptance Criteria` with Given/When/Then Scenarios?
-    * *If missing*: WARN the user — "Spec lacks structured Acceptance Criteria. Run `/project-plan` to fix."
+1.  **Verify Spec Structure**: Run `pactkit spec-lint docs/specs/{STORY_ID}.md` to validate Spec structure (E006 checks for `## Acceptance Criteria`).
+    * *If ERRORs*: WARN the user — "Spec structure issues found. Run `/project-plan` to fix."
+    * *If WARNs only*: Note warnings and continue.
 2.  **Extract Scenarios**: List all Scenarios from the Spec's `## Acceptance Criteria` section.
 3.  **Check**: Does `docs/test_cases/{STORY_ID}_case.md` exist?
 4.  **Action**: If missing, generate it based *strictly* on the Spec's Acceptance Criteria.
     * *Format*: Gherkin (Given/When/Then).
     * *Constraint*: Do not write Python code yet.
-5.  **Coverage Report**: Compare Scenarios in Spec vs Test Cases. Report any uncovered Scenario.
+5.  **Validate Test Case Structure**: Run `pactkit lint-testcase docs/test_cases/{STORY_ID}_case.md` to validate the test case file structure. If errors, WARN the user.
+6.  **Coverage Report**: Compare Scenarios in Spec vs Test Cases. Report any uncovered Scenario.
 
 ## Phase 3.5: Test Quality Gate
 > **Purpose**: Prevent tautological or low-value tests from passing the regression gate unchallenged.
@@ -108,7 +110,7 @@ Choose the strategy identified in Phase 0:
 
 ## Phase 5: The Verdict
 1.  **Run Suite**: Execute the specific test file created above (Story E2E test).
-2.  **Run Unit (Incremental)**: Use Test Mapping Protocol (see Shared Protocols) to run only tests related to changed modules. Fallback to full suite if no mapping.
+2.  **Run Unit (Incremental)**: Run `pactkit test-map <changed-files>` to map source files to test files. Run only mapped tests. Fallback to full suite if no mapping.
 3.  **Report**: Output structured verdict:
 
 ```

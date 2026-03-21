@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.2.0 Modular)
+# PactKit Global Constitution (v2.3.0 Modular)
 
 # Core Protocol
 
@@ -12,6 +12,7 @@ Before modifying code:
 - Run `visualize` to view module dependency graph
 - Run `visualize --mode class` for class inheritance
 - Run `visualize --mode call --entry <func>` to trace call chains
+- **PDCA Exemption**: When a PDCA command is active, the command's own visualize phases take precedence — skip Visual First.
 
 ## Strict TDD
 - Write tests first (RED), then write implementation (GREEN)
@@ -19,21 +20,19 @@ Before modifying code:
 - All tests must pass before committing
 
 ## Language Matching
-- Match the user's language: if the user writes in Chinese, respond in Chinese; if in English, respond in English.
-- This applies to all output including PDCA command phases, explanations, and summaries.
-- Technical terms (function names, file paths, git commands) remain in their original form.
+- Match the user's language (Chinese→Chinese, English→English).
+- Technical terms (function names, file paths, git commands) stay in original form.
 
 ## Subagent Model Selection
-When spawning subagents via the Agent tool, select the `model` parameter based on task complexity:
+Select `model` based on task complexity:
 
-| Model | When to Use | Examples |
-|-------|-------------|----------|
-| **haiku** | Simple exploration, file search, format checks, info extraction | Find files matching pattern, check if X exists, extract config values |
-| **sonnet** | Code implementation, test writing, most general-purpose tasks | Write function, create tests, refactor module, fix bug |
-| **opus** | Complex architecture decisions, deep reasoning, multi-step planning | Design system architecture, resolve conflicting requirements, tricky debugging |
+| Model | When to Use |
+|-------|-------------|
+| **haiku** | File search, format checks, info extraction |
+| **sonnet** | Code implementation, test writing, general tasks (default) |
+| **opus** | Architecture decisions, deep reasoning, multi-step planning |
 
-**Default**: If uncertain, use `sonnet` — it balances capability and cost.
-**Cost awareness**: `haiku` is ~10x cheaper than `sonnet`, `sonnet` is ~5x cheaper than `opus`. Prefer the smallest model that can reliably complete the task.
+**Cost**: haiku ~10x cheaper than sonnet, sonnet ~5x cheaper than opus.
 
 # The Hierarchy of Truth
 > **CRITICAL**: Code is NOT the law.
@@ -60,6 +59,7 @@ When spawning subagents via the Agent tool, select the `model` parameter based o
 - Before modifying code, you must first read the relevant Spec (`docs/specs/`)
 - Before modifying tests, you must first read the corresponding Test Case (`docs/test_cases/`)
 - When unsure whether a Spec exists, use `Glob` to search `docs/specs/*.md` (covers STORY-*, HOTFIX-*, BUG-* prefixes)
+- **Exemption**: `/project-plan` and `/project-design` create new Specs — they are exempt from "read Spec before modifying code" since the Spec does not yet exist.
 
 # File Atlas
 
