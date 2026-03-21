@@ -7,7 +7,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - **Usage**: `/project-act $ARGUMENTS`
 - **Agent**: Senior Developer
 
-## 🧠 Phase 0: The Thinking Process (Mandatory)
+## 🧠 Phase 0: The Thinking Process
+> **Execution Style**: Work through each phase incrementally — output progress as you go. Do NOT try to plan all implementation steps in your head before producing output.
 1.  **Read Law**: Read the Spec (`docs/specs/`) carefully.
 2.  **RFC Gate (Feasibility Check)**: If you identify a requirement in the Spec that is technically infeasible, contradictory, or would require violating a security/architectural constraint, invoke the **RFC Protocol**:
     - **STOP** implementation immediately. Do NOT write any code.
@@ -31,32 +32,15 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **If WARNs only**: Output the WARN list, then **continue** to Phase 1.
 4.  **If all pass**: Continue silently to Phase 1.
 
-## 📊 Phase 0.6: Consistency Check (Advisory)
-> **PURPOSE**: Left-shift quality — catch Spec ↔ Board ↔ Test Case misalignment at the cheapest point (pure text, before any code).
-> **NON-BLOCKING**: All findings are WARN or INFO. This phase NEVER stops Act.
-1.  **Spec ↔ Board Alignment**:
-    - Parse all `### R{N}:` subsections from `docs/specs/{STORY_ID}.md` → list of requirements
-    - Parse the Story's task list from `docs/product/sprint_board.md` (the `- [ ]` items under this Story)
-    - Cross-reference: for each requirement, find a matching task (exact `R{N}` ID OR ≥50% keyword overlap)
-    - Output alignment matrix:
-      ```
-      | Spec Requirement | Board Task | Status |
-      | R1: xxx          | Task: xxx  | ✅ Aligned |
-      | R2: xxx          | —          | ⚠️ Missing Task |
-      | —                | Task: yyy  | ⚠️ No matching Requirement |
-      ```
-2.  **Spec AC ↔ Test Case Coverage**:
-    - Parse all `### AC{N}:` subsections from the Spec
-    - Check if `docs/test_cases/{STORY_ID}_case.md` exists
-    - If exists: cross-reference AC items with Scenario entries; report uncovered ACs
-    - If not exists: output `ℹ️ Test Case not yet created (normal — generated during Check phase)`
-3.  **Summary**:
-    - Output counts: `Alignment: {N}/{total} requirements matched | Coverage: {N}/{total} ACs covered`
-    - If WARNs found: "Consider updating the Board tasks to match Spec requirements before proceeding."
-4.  **Continue**: Regardless of findings, proceed to Phase 1.
+## 📊 Phase 0.6: Consistency Check (Lightweight)
+> **PURPOSE**: Quick pre-flight to verify artifacts exist. Full alignment analysis is deferred to `/project-check` (normal workflow).
+> **NON-BLOCKING**: This phase NEVER stops Act.
+1.  **Spec exists?**: Check if `docs/specs/{STORY_ID}.md` exists. If not: WARN "Spec not found".
+2.  **Board entry exists?**: Check if `{STORY_ID}` appears in `docs/product/sprint_board.md`. If not: WARN "Board entry not found".
+3.  **Continue**: Regardless of findings, proceed to Phase 1.
 
 ## 🎬 Phase 1: Precision Targeting
-1.  **Visual Scan**: Run `visualize --focus <module>` to see neighbors. For large codebases, add `--depth 2`.
+1.  **Targeted Visual Scan**: Run `visualize --focus <module>` only (single targeted mode). For large codebases, add `--depth 2`. Do NOT run full 3-mode visualize here — that is handled by Phase 4 Lazy Visualize after implementation.
 2.  **Trace Verification** — use pactkit-trace skill:
     - Before touching any code, confirm the call site and ensure you don't break existing callers.
 
@@ -74,15 +58,11 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - **Environment Failure Bailout**: For environment errors (`ModuleNotFoundError`, `ImportError`, `ConnectionError`, `ConnectionRefusedError`, `PermissionError`, timeout):
       - **Project-internal check first**: If the missing module is project-internal (part of your codebase): NOT a bailout — do not modify source code for env issues, go back and implement it.
       - If third-party: attempt to resolve the dependency (e.g., `pip install`), then STOP and report if unresolvable.
-3.  **Regression Check (Read-Only Gate)**: After the TDD loop is GREEN, run a broader regression check.
-    - **Identify changed modules**: `git diff --name-only HEAD` to list modified source files.
-    - **Doc-Only detection**: Classify changed files using `LANG_PROFILES[stack].source_dirs`. If zero source files changed, skip regression. Log: `"Regression: SKIP — doc-only change"`.
-    - **Map to related tests**: Use Test Mapping Protocol (see Shared Protocols) for incremental test selection.
-    - **Scope decision**: If any changed file has 3+ importers in `code_graph.mmd`, run full suite. Otherwise, run only mapped tests.
-    - **Fallback**: If no test mapping can be determined, fall back to the full test suite.
+3.  **Regression Check (Read-Only Gate)**: After the TDD loop is GREEN, run the project's test suite as a broader regression check.
+    - Run `pactkit regression` (uses `git diff` + `LANG_PROFILES` to classify: SKIP/FULL/IMPACT). Doc-only changes are auto-skipped.
+    - If IMPACT: run `pactkit test-map <changed-files>` for incremental test selection. If any changed file has 3+ importers in `code_graph.mmd`, run full suite. Fallback: full suite.
     - **CRITICAL — Pre-existing test failure protocol**: If a pre-existing test fails, **DO NOT modify** it. **STOP** and report to the user. This is a one-shot check, not an iterative loop.
 
 ## 🎬 Phase 4: Sync & Document
-1.  **Hygiene**: Delete temp files.
-2.  **Update Reality (Lazy Visualize)**: Apply the Lazy Visualize Protocol (see Shared Protocols) — run `visualize`, `--mode class`, and `--mode call` if source files changed.
-3.  **Update Board (CRITICAL)**: Mark the tasks in `docs/product/sprint_board.md` as `[x]`.
+1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed).
+2.  **Update Board (CRITICAL)**: Run `{BOARD_CMD} update_task {STORY_ID} "Task Name"` for each completed task to mark it as `[x]`.

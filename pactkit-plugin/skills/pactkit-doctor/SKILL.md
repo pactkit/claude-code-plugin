@@ -20,35 +20,22 @@ Diagnostic tool for project health — config drift, missing files, stale graphs
 
 ## Protocol
 
-### 1. Structural Health
+### 1. Run Deterministic Checks
+Run `pactkit doctor` to perform automated diagnostics:
+- **Orphaned/Missing Specs**: Cross-references `docs/specs/` vs board + archive.
+- **Config Drift**: Compares `pactkit.yaml` items vs deployed files.
+- **Stale Graphs**: Checks `docs/architecture/graphs/*.mmd` mtimes vs source files.
+
+### 2. Structural Health (Manual)
 - Run `visualize` to check architecture graph generation.
 - Run `visualize --mode class` for class diagram verification.
 - Check `docs/test_cases/` existence.
 
-### 2. Stale Architecture Graph Detection
-- Compare `docs/architecture/graphs/*.mmd` modification times against newest source file mtime.
-- If any graph file is older than the newest source file by > 7 days: report WARN.
-- Suggest: "Run `visualize` to refresh stale architecture graphs."
-
-### 3. Orphaned and Missing Specs
-- **Orphaned Specs** (INFO): List spec files in `docs/specs/` that have no matching entry in `docs/product/sprint_board.md` or `docs/product/archive/`.
-- **Missing Specs** (WARN): List story IDs found in Sprint Board that have no corresponding `docs/specs/{ID}.md` file.
-- Suggest: "Run `/project-plan` to create missing specs."
-
-### 4. Configuration Drift Detection
-- Compare `pactkit.yaml` (in `.claude/` or `.opencode/`) against deployed files:
-  - Check if enabled agents match deployed agent files.
-  - Check if enabled rules match deployed rule files.
-  - Check if enabled skills match deployed skill directories.
-- Any mismatch: report ERROR with specific drift details.
-- Suggest: "Run `pactkit update` to sync configuration."
-
-### 5. Infrastructure & Data
+### 3. Infrastructure & Data
 - Verify `pactkit.yaml` exists (in `.claude/pactkit.yaml` or `.opencode/pactkit.yaml`) and is valid.
-- Check Specs vs Board linkage (every board story should have a spec).
 - Check if `tests/e2e/` is empty.
 
-### 6. Report
+### 4. Report
 Output a structured health report grouped by category:
 
 | Category | Check Item | Severity | Description |

@@ -20,7 +20,7 @@ Version release management — update versions, snapshot architecture, create Gi
 ### 1. Version Update
 - Run `update_version "$VERSION"` via pactkit-board skill.
 - Update the project's package manifest (e.g., `pyproject.toml`, `package.json`).
-- Backfill Specs: scan `docs/specs/*.md` for `Release: TBD` and update completed ones.
+- Backfill Specs: run `pactkit backfill-release $VERSION` to replace `Release: TBD` in completed specs.
 
 ### 2. Architecture Snapshot
 - Run `visualize` (all three modes: file, class, call).

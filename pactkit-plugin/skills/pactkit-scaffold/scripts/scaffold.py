@@ -217,6 +217,7 @@ def create_board():
         return f"⚠️ Board already exists: {p}"
     if not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
+    # Canonical: src/pactkit/schemas.py BOARD_SECTION_BACKLOG, BOARD_SECTION_IN_PROGRESS, BOARD_SECTION_DONE
     c = nl().join(
         [
             "# Sprint Board",

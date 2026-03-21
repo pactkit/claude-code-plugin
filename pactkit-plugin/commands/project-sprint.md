@@ -11,7 +11,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > Each subagent reads `docs/specs/`, `commands/*.md`, and `docs/product/sprint_board.md` from disk.
 
 ## Phase 0: Setup
-1. Parse requirement from `$ARGUMENTS`. Determine next STORY-ID via Glob on `docs/specs/`.
+1. Parse requirement from `$ARGUMENTS`. Run `pactkit next-id` to determine next STORY-ID.
 2. `TeamCreate("sprint-{STORY_ID}")`.
 3. `TaskCreate` for each stage: Plan (no deps), Act (blockedBy: Plan), Check-QA (blockedBy: Act), Check-Security (blockedBy: Act), Close (blockedBy: both Checks).
 4. Verify worktree support (`git worktree list`). Use `isolation="worktree"` if supported.

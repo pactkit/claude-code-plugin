@@ -7,7 +7,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 - **Usage**: `/project-plan "$ARGUMENTS"`
 - **Agent**: System Architect
 
-## 🧠 Phase 0: The Thinking Process (Mandatory)
+## 🧠 Phase 0: The Thinking Process
+> **Execution Style**: Work through each phase incrementally — output progress as you go. Do NOT try to plan the entire Spec in your head before producing output. Start each phase, show your findings, then move to the next.
 > **Tool Integration Note**: If the request involves adapting PactKit to a new AI coding tool (new `format` value like `codex`, `cursor`, etc.), **always start** by consulting `docs/guides/tool-integration-checklist.md`. Complete Dimension 0 (capability matrix) before writing any code. See also `docs/guides/codex-integration-preresearch.md` for an example pre-research template.
 
 1.  **Analyze Intent**: New feature (Expansion) or Bugfix/Refactor (Modification)?
@@ -22,20 +23,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - **If existing project** (stories on board, source files present): Skip this check — greenfield detection does not apply to established projects.
 
 ## 🛡️ Phase 0.5: Init Guard (Auto-detect)
-> **INSTRUCTION**: Check if the project has been initialized before proceeding.
-1.  **Check Markers**: Verify the existence of ALL three:
-    - `{PACTKIT_YAML}` (project-level config)
-    - `docs/product/sprint_board.md` (sprint board)
-    - `docs/architecture/graphs/` (architecture graph directory)
-2.  **If ANY marker is missing**:
-    - Print: "⚠️ Project not initialized. Running `/project-init` first..."
-    - Execute the full `/project-init` flow to scaffold the missing structure.
-    - After `/project-init` completes, resume this Plan command from Phase 1.
-3.  **If ALL markers exist**: Proceed to Step 4.
-4.  **Config Completeness Check**: Verify `pactkit.yaml` has all expected sections (hooks, ci, issue_tracker, lint_blocking, auto_fix).
-    - If any sections are missing, the config is stale. Run `pactkit update` to backfill missing sections.
-    - Report what was added (e.g., "Config refreshed: added hooks, ci sections").
-    - If the config is already complete and up to date, skip silently to Phase 1.
+1.  Run `pactkit guard` to check init markers (pactkit.yaml via `{PACTKIT_YAML}`, `docs/product/sprint_board.md`, `docs/architecture/graphs/`).
+2.  If exit code 1: project is not initialized — print the missing markers and **STOP**. Suggest running `/project-init`.
+3.  If all exist: check config completeness (hooks, ci, issue_tracker sections). If stale, run `pactkit update` and report what was added.
+4.  If PASS: proceed to Phase 1.
 
 ## 🧠 Phase 0.7: Clarify Gate (Auto-detect Ambiguity)
 > **PURPOSE**: Surface and resolve requirement ambiguity before the Spec is written. Better to clarify now than rewrite a Spec.
@@ -43,13 +34,13 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - [High] No quantitative metrics ("高并发" without QPS, "fast" without benchmark)
     - [High] No boundary conditions ("user management" without specifying which operations)
     - [Medium] No technical constraints (no auth method, no framework specified)
-    - [Medium] Single sentence input (< 15 words) — likely under-specified
+    - [Low] Single sentence input (< 15 words) — likely under-specified but not blocking
     - [Medium] Vague quantifiers ("some", "many", "a few", "大量", "一些", "简单")
     - [Medium] No target user specified
 2.  **Trigger Logic**:
-    - ≥ 2 High signals (no metrics, no boundaries) → **Auto-trigger** Clarify
-    - 1 High + ≥ 2 Medium signals → **Auto-trigger** Clarify
-    - ≥ 2 Medium signals → **Suggest** Clarify (ask user: "Input seems underspecified. Clarify? yes/skip")
+    - 2 High + ≥ 1 Medium signals → **Auto-trigger** Clarify
+    - ≥ 2 High signals (no Medium) → **Suggest** Clarify (ask user: "Input may be underspecified. Clarify? yes/skip")
+    - 1 High + ≥ 2 Medium signals → **Suggest** Clarify
     - Otherwise → **Silent skip**
 3.  **Greenfield Force-Trigger**: If Phase 0 detected a Greenfield project and the user chose to continue with `/project-plan` (not `/project-design`), **always trigger** Clarify regardless of score.
 4.  **If triggered**: Generate 3–6 structured questions covering:
@@ -77,13 +68,12 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 2.  **Update HLD**: Modify `docs/architecture/graphs/system_design.mmd`.
     - *Rule*: Keep the `code_graph.mmd` as is (it updates automatically).
 
-## 🎬 Phase 3: Deliverables
-1.  **Story ID Generation** (STORY-072):
-    - Read `developer` from `pactkit.yaml` (check `{PACTKIT_YAML}`).
-    - If `developer` has a value (e.g., `alice`): use ID format `STORY-{developer}-{NNN}` (e.g., `STORY-alice-001`).
-    - If `developer` is empty or missing: use ID format `STORY-{NNN}` (backward compatible).
-    - NNN: scan `docs/specs/` for existing files with the same prefix, find the max number, increment by 1.
-2.  **Spec**: Create `docs/specs/{ID}.md` detailing the *Change*.
+## 🎬 Phase 3.1: Story ID Generation
+1.  Run `pactkit next-id` to get the next Story ID (reads developer prefix from pactkit.yaml, scans `docs/specs/`).
+2.  **Output checkpoint**: Print "Story ID determined: {ID}. Writing Spec now."
+
+## 🎬 Phase 3.2: Write Spec
+1.  **Spec**: Create `docs/specs/{ID}.md` detailing the *Change*.
     - **MUST — Metadata Table**: Include a metadata table at the top of the Spec using this EXACT format:
       ```markdown
       | Field | Value |
@@ -106,31 +96,32 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       | 1 | `src/foo.py` | Description | None | Low |
       ```
       The `Dependencies` column accepts `None`, `Step N`, or comma-separated step references. The `Risk` column accepts `Low`, `Medium`, `High`. This section is optional but RECOMMENDED for multi-file changes.
-    - **MUST — Security Scope**: Add `## Security Scope` section to the Spec based on the changed files identified in Phase 1 Trace. Use these detection rules:
+    - **MUST — Security Scope**: Run `pactkit sec-scope <changed-files>` to auto-detect SEC-1~SEC-8 applicability. Paste the output Markdown table into the `## Security Scope` section of the Spec. If `pactkit sec-scope` is unavailable, apply these detection rules manually:
       | Check | Applicable When |
       |-------|-----------------|
       | SEC-1 | Any source code file modified (`.py`, `.js`, `.ts`, `.go`, `.java`, etc.) |
       | SEC-2 | Code contains `request.`, `form.`, `input`, `argv`, `sys.stdin`, `process.argv` |
-      | SEC-3 | Files in `models/`, `dao/`, `repository/`; or code contains `SELECT`, `INSERT`, `UPDATE`, `DELETE`, ORM patterns |
-      | SEC-4 | Frontend files (`.tsx`, `.vue`, `.svelte`, `.html`); or code contains `innerHTML`, `dangerouslySetInnerHTML`, template rendering |
+      | SEC-3 | Files in `models/`, `dao/`, `repository/`; or code contains SQL/ORM patterns |
+      | SEC-4 | Frontend files (`.tsx`, `.vue`, `.svelte`, `.html`); or code contains `innerHTML`, `dangerouslySetInnerHTML` |
       | SEC-5 | Files in `auth/`, `session/`, `login/`; or code contains `token`, `jwt`, `cookie`, `session` |
-      | SEC-6 | Files in `api/`, `routes/`, `endpoints/`, `controllers/`; or new public endpoints added |
+      | SEC-6 | Files in `api/`, `routes/`, `endpoints/`, `controllers/` |
       | SEC-7 | Files in `api/`, `routes/`; or code contains exception handling patterns |
       | SEC-8 | Dependency files modified (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`) |
 
-      **Docs/tests-only shortcut**: If ONLY files matching `docs/**`, `tests/**`, `*.md`, `README*` are modified, mark ALL checks N/A with reason "docs/tests only".
+      **Docs/tests-only shortcut**: If ONLY `docs/**`, `tests/**`, `*.md`, `README*` files changed, mark ALL checks N/A with Reason "docs/tests only".
 
-      Output format in the Spec:
+      Output format (the table must include a Reason column):
       ```markdown
       ## Security Scope
       | Check | Applicable | Reason |
       |-------|------------|--------|
       | SEC-1 | Yes | Source code modified |
-      | SEC-2 | No | No user input handling |
-      | SEC-3 | Yes | models/user.py modified |
+      | SEC-2 | N/A | No user input handling |
       ```
     - **Spec Lint Self-Check**: After writing the Spec, run `pactkit spec-lint docs/specs/{ID}.md`. If ERROR rules fail, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until clean. This prevents the Spec from being rejected at Act Phase 0.5.
-2.  **Board**: Add Story using `add_story`.
-3.  **Memory MCP (Conditional)**: IF Memory MCP is available, use create_entities to store design context (decisions, target files, rationale) under entity `{STORY_ID}`. Record story dependencies if applicable.
-4.  **Session Context Update**: Update `docs/product/context.md` using the Context.md Canonical Format (see Shared Protocols). Set "Last updated by" to `/project-plan`.
-5.  **Handover**: "Trace complete. Spec created. Ready for Act."
+
+## 🎬 Phase 3.3: Board, Memory & Handover
+1.  **Board**: Add Story using `add_story`.
+2.  **Memory MCP (Conditional)**: IF Memory MCP is available, use create_entities to store design context (decisions, target files, rationale) under entity `{STORY_ID}`. Record story dependencies if applicable.
+3.  **Session Context Update**: Run `pactkit context` to generate `docs/product/context.md`. Set "Last updated by" to `/project-plan`.
+4.  **Handover**: "Trace complete. Spec created. Ready for Act."
