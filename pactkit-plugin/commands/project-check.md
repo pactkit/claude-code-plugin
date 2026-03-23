@@ -95,22 +95,25 @@ For each finding, assign a severity (P0-P3). Flag issues that may cause silent f
 3.  **Report**: For each finding, assign the severity above and include it in the Phase 5 verdict.
 4.  **Gate**: If any P1 test quality issue is found, flag it as a required fix (same as a code quality P1).
 
-## Phase 4: Layered Execution
-Choose the strategy identified in Phase 0:
+## Phase 4: E2E Execution (Config-Driven)
+> Read `pactkit.yaml` field `e2e.type` to select strategy. Default: `none` (skip).
 
-### Strategy A: API Level (Fast & Stable)
-* **Context**: Backend logic, calculations.
-* **Action**: Create/Run `tests/e2e/api/test_{STORY_ID}.py` using `pytest` + `requests`.
+| e2e.type | Test Path | Tools | Cleanup |
+|----------|-----------|-------|---------|
+| `none` | Skip — log "E2E skipped" | — | — |
+| `cli` | `{e2e.test_dir}/cli/test_{STORY_ID}_cli.py` | pytest + subprocess | pytest `tmp_path` fixture (auto) |
+| `frontend` | `{e2e.test_dir}/browser/test_{STORY_ID}_browser.py` | Playwright + MSW mock from `e2e.api_spec` | MSW in-memory interceptors (auto) |
+| `backend` | `{e2e.test_dir}/api/test_{STORY_ID}_api.py` | pytest + httpx, contract via `e2e.api_spec` | transaction rollback via fixtures |
+| `fullstack` | `{e2e.test_dir}/browser/test_{STORY_ID}_full.py` | docker-compose up + Playwright | `docker-compose down -v` |
 
-### Strategy B: Browser Level (Visual & Real)
-* **Context**: UI, DOM, User Flows.
-* **Action**: Create/Run `tests/e2e/browser/test_{STORY_ID}_browser.py`.
-* **Playwright MCP (Conditional)**: IF Playwright MCP is available, use it for browser-level verification (navigation, snapshots, interactions).
-* **Chrome DevTools MCP (Conditional)**: IF Chrome DevTools MCP is available, use it for performance tracing and runtime diagnostics.
+* **Playwright MCP**: IF available, use for browser verification (frontend/fullstack).
+* **Chrome DevTools MCP**: IF available, use for performance tracing.
+* **`e2e.env_file`** (default `.env.test`): Load test credentials (API tokens, DB strings) from this file before running E2E. If file missing, WARN but continue.
+* **`e2e.blocking`** (default `false`): If `false`, E2E failures → WARN. If `true`, E2E failures → FAIL (blocks `/project-done`).
 
 ## Phase 5: The Verdict
-1.  **Run Suite**: Execute the specific test file created above (Story E2E test).
-2.  **Run Unit (Incremental)**: Run `pactkit test-map <changed-files>` to map source files to test files. Run only mapped tests. Fallback to full suite if no mapping.
+1.  **Run Unit (Incremental)**: Run `pactkit test-map <changed-files>` to map source files to test files. Run only mapped tests. Fallback to full suite if no mapping.
+2.  **Run E2E**: If `e2e.type` is not `none`, execute the E2E test file created in Phase 4.
 3.  **Report**: Output structured verdict:
 
 ```

@@ -22,7 +22,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > **Goal**: Create `docs/product/prd.md` — the single source of truth for the product.
 
 1.  **Scaffold**: Run `{SCAFFOLD_CMD} create_prd "{ProductName}"`.
-2.  **Fill Sections** — Complete each section in the PRD. Work through 3 groups, outputting progress after each:
+2.  **Read Scaffolded File**: Read `docs/product/prd.md` before writing content (required — Write/Edit tools cannot modify unread files).
+3.  **Fill Sections** — Complete each section in the PRD using **sectional write**: Edit each Group into `prd.md` immediately after completing it, then print a checkpoint before moving on.
 
 ### Group A: Product Foundation (Sections 1.1-1.2)
 
@@ -40,6 +41,8 @@ For each persona, fill:
   - *Functional*: What task are they trying to accomplish?
   - *Emotional*: How do they want to feel?
   - *Social*: How do they want to be perceived?
+
+4.  **Edit**: Write Group A content (Sections 1.1-1.2) into `docs/product/prd.md`. Print checkpoint: "Group A written. Proceeding to Group B."
 
 ### Group B: Features & Design (Sections 1.3-1.6)
 
@@ -82,6 +85,8 @@ For each key screen:
     - Call `lucide.createIcons()` at the end of `<body>` to render icons
 4.  **Browser Preview (Conditional)**: IF `mcp__playwright__browser_navigate` tool is available, open each prototype in the browser for live preview. IF Playwright MCP is not available, print the file path for manual opening.
 
+5.  **Edit**: Write Group B content (Sections 1.3-1.6) into `docs/product/prd.md`. Print checkpoint: "Group B written. Proceeding to Group C."
+
 ### Group C: Technical & Strategy (Sections 1.7-2.0)
 
 ### 1.7 API Design
@@ -108,7 +113,7 @@ Assign each Story to a horizon:
 - **Next (Sprint 4-8)**: Differentiation — features that create competitive advantage
 - **Later (Sprint 9+)**: Scale — platform expansion, optimization, advanced features
 
-3.  **Write**: Save the completed PRD to `docs/product/prd.md`.
+6.  **Edit**: Write Group C content (Sections 1.7-2.0) into `docs/product/prd.md`. Print checkpoint: "Group C written. PRD complete."
 
 ## 🎬 Phase 2: Architecture
 1.  **Update HLD**: Write the architecture Mermaid diagram from Section 1.4 into `docs/architecture/graphs/system_design.mmd`.
@@ -121,12 +126,14 @@ Assign each Story to a horizon:
 2.  **Sort**: Order stories by horizon (Now → Next → Later), then by Priority Score (descending).
 3.  **For each Story**:
     - Run `{SCAFFOLD_CMD} create_spec "STORY-{NNN}" "{title}"`.
+    - **Read the scaffolded file** before writing content (required — Write/Edit tools cannot modify unread files).
     - Fill in the Spec:
       - `## Requirements` — using RFC 2119 keywords (MUST/SHOULD/MAY)
       - `## Acceptance Criteria` — Given/When/Then scenarios
       - Add Priority Score to the spec header: `- **Priority**: {score} (Impact {I} / Effort {E})`
 4.  **Spec Lint Self-Check**: After each Spec is generated, run `pactkit spec-lint docs/specs/{STORY_ID}.md`. If ERRORs found, self-correct and re-run until clean. This prevents malformed Specs from blocking the Sprint pipeline at Act Phase 0.5.
-5.  **Dependency Graph**: Add a Mermaid dependency graph at the end of the PRD showing Story execution order and critical path.
+5.  **Batch Checkpoint**: Every 3 Specs completed, print a progress checkpoint (e.g., "3/8 Specs created. Continuing."). This prevents unbounded continuous output.
+6.  **Dependency Graph**: Add a Mermaid dependency graph at the end of the PRD showing Story execution order and critical path.
 
 ## 🎬 Phase 4: Board Setup
 1.  **Add Stories**: For each Story (ordered by horizon → priority):
