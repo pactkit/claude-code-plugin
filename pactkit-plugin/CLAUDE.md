@@ -1,9 +1,10 @@
-# PactKit Global Constitution (v2.3.1 Modular)
+# PactKit Global Constitution (v2.3.3 Modular)
 
 # Core Protocol
 
 ## Session Context
-On new session, read `docs/product/context.md` to understand project state before taking action.
+On new session, run `pactkit update --if-needed` to sync project files if PactKit was upgraded.
+Then read `docs/product/context.md` to understand project state before taking action.
 If the file is missing, suggest `/project-init` to bootstrap the project.
 If "Last updated" date is before today, suggest running `$daily-retro`.
 
@@ -343,5 +344,35 @@ Write `docs/product/context.md` using this format:
 | New template variable | `deployer.py` → `_render_prompt()` var_map | All deployed prompts |
 | New spec rule | `schemas.py` + `spec_linter.py` | scaffold, playbooks |
 | New prompt placeholder | `profiles.py` (if env-specific) or `schemas.py` (if doc-specific) | `_render_prompt()` |
+
+# Sectional Write Protocol
+
+## Rule
+When generating **any file** (code, document, test, HTML, etc.) that will exceed **300 lines**:
+
+1. **Write skeleton first**: Create the file with the structural framework (imports, class/function signatures, section headings) via a single Write call
+2. **Edit block-by-block**: Fill in one logical block at a time, using Edit after each block before starting the next
+3. **Checkpoint between blocks**: After each Edit, print a brief progress message (e.g., "Block 2/5 written.")
+4. **Never accumulate**: Do NOT compose the entire file in reasoning before writing — write as you go
+
+## Applies To — any file type over 150 lines
+- Documents: PRD, specs, README, architecture guides
+- Source code: large modules, multi-endpoint API files, data models
+- Tests: test files with many test classes or scenarios
+- HTML/templates: prototypes, page templates
+
+## Does NOT Apply To
+- Short files (< 300 lines): single Write is fine
+- Small config files (YAML, JSON, TOML)
+
+## Anti-Pattern (DO NOT)
+```
+Compose entire file in head → one Write call at the end
+```
+
+## Correct Pattern
+```
+Write skeleton → Edit block 1 → checkpoint → Edit block 2 → checkpoint → ...
+```
 
 > **TIP**: Run `/project-init` to set up project governance and enable cross-session context.

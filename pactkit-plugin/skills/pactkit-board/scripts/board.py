@@ -252,6 +252,10 @@ def archive_stories():
             f.write(nl() + part.strip() + nl())
     new_content = "".join(active_parts)
     new_content = re.sub(r"\n{3,}", nl() + nl(), new_content)
+    # Ensure required section headers survive after archiving stories
+    for section in (_BACKLOG, _IN_PROGRESS, _DONE):
+        if section not in new_content:
+            new_content = new_content.rstrip() + nl() + nl() + section + nl()
     tmp = board_path.with_suffix(".tmp")
     tmp.write_text(new_content, encoding="utf-8")
     os.replace(tmp, board_path)
