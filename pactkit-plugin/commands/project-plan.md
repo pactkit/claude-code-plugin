@@ -79,53 +79,33 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 1.  Run `pactkit next-id` to get the next Story ID (reads developer prefix from pactkit.yaml, scans `docs/specs/`).
 2.  **Output checkpoint**: Print "Story ID determined: {ID}. Writing Spec now."
 
-## 🎬 Phase 3.2a: Spec Skeleton (Metadata + Requirements)
-1.  **Create file**: Create `docs/specs/{ID}.md` with the following sections:
-    - **MUST — Metadata Table**: Include a metadata table at the top using this EXACT format:
-      ```markdown
-      | Field | Value |
-      |-------|-------|
-      | ID | {ID} |
-      | Status | Draft |
-      | Priority | P2 |
-      | Release | {version} |
-      ```
-      Field names MUST be exact case (ID, Status, Priority, Release) — not bold, not different names.
-    - **MUST**: Fill in the `Release` metadata field by reading the `version` field from `{PACTKIT_YAML}` or `pyproject.toml`. Use that EXACT value — do NOT increment or predict a future version. If the file cannot be read, use `TBD`.
-    - **MUST**: Include `## Background` and `## Target Call Chain` sections based on your Trace findings.
-    - **MUST**: Fill in the `## Requirements` section using RFC 2119 keywords (MUST/SHOULD/MAY).
-2.  **Output checkpoint**: Print "Spec skeleton written. Adding acceptance criteria."
+## 🎬 Phase 3.2a: Scaffold + Metadata Table & Requirements
+1.  **Scaffold**: Run `{SCAFFOLD_CMD} create_spec "{ID}" "{title}"` to generate `docs/specs/{ID}.md` from SPEC_TEMPLATE. This creates all sections, tables, and Given/When/Then skeleton — format is guaranteed by Code.
+2.  **Read**: Read `docs/specs/{ID}.md` to see the scaffolded template.
+3.  **Edit placeholders** (use Edit tool, NOT Write):
+    - Edit `Release | TBD` → `Release | {version}` (read version from `{PACTKIT_YAML}` or `pyproject.toml`; if unreadable, keep TBD)
+    - Edit `(Description of the problem or feature)` → actual Background content from your Trace findings
+    - Edit `## Target Call Chain` placeholder → actual call chain from Phase 1
+    - Edit `### R1: (Requirement Name) (MUST)` → actual requirements using RFC 2119 keywords (MUST/SHOULD/MAY). Add more R{N} sections as needed.
+4.  **Output checkpoint**: Print "Spec skeleton filled. Adding acceptance criteria."
 
 ## 🎬 Phase 3.2b: Acceptance Criteria & Implementation Steps
-1.  **MUST**: Add `## Acceptance Criteria` section with Given/When/Then scenarios.
+1.  **Edit AC** (use Edit tool): Replace `### AC1: (Scenario Name) (R1)` and its Given/When/Then placeholders with actual scenarios. The template already provides the `- **Given**` / `- **When**` / `- **Then**` structure — fill in the content. Add more AC{N} sections as needed.
     - Each Scenario SHOULD map to a verifiable test case in `docs/test_cases/`.
-2.  **OPTIONAL — Implementation Steps**: If Phase 1 Trace identifies 2+ files to modify, add `## Implementation Steps` section with table format:
-    ```
-    | Step | File | Action | Dependencies | Risk |
-    |------|------|--------|--------------|------|
-    | 1 | `src/foo.py` | Description | None | Low |
-    ```
-    The `Dependencies` column accepts `None`, `Step N`, or comma-separated step references. The `Risk` column accepts `Low`, `Medium`, `High`.
+2.  **Edit Implementation Steps** (optional): If Phase 1 Trace identifies 2+ files to modify, replace the placeholder rows in `## Implementation Steps` with actual steps. The table skeleton (headers + separator) is already in the template.
 3.  **Output checkpoint**: Print "Acceptance criteria written. Running security scope."
 
 ## 🎬 Phase 3.2c: Security Scope
-1.  **MUST**: Run `pactkit sec-scope <changed-files>` to auto-detect SEC-1~SEC-8 applicability. Append the output to `## Security Scope` in the Spec.
-2.  **Fallback**: If `pactkit sec-scope` is unavailable, manually assess each SEC-1 through SEC-8 check based on changed file paths and code patterns. Apply docs/tests-only shortcut if applicable (mark ALL N/A with Reason "docs/tests only").
-3.  **Output format** (the table must include a Reason column):
-    ```markdown
-    ## Security Scope
-    | Check | Applicable | Reason |
-    |-------|------------|--------|
-    | SEC-1 | Yes | Source code modified |
-    | SEC-2 | N/A | No user input handling |
-    ```
-4.  **Output checkpoint**: Print "Security scope appended. Running lint."
+1.  **MUST**: Run `pactkit sec-scope <changed-files>` to auto-detect SEC-1~SEC-8 applicability.
+2.  **Edit** the `## Security Scope` section already in the template: replace the placeholder SEC-1 row with actual SEC-* assessments from the output above. The table skeleton (Check/Applicable/Reason headers) is already in the template.
+3.  **Fallback**: If `pactkit sec-scope` is unavailable, manually Edit each SEC-1 through SEC-8 entry. Apply docs/tests-only shortcut if applicable (mark ALL N/A with Reason "docs/tests only").
+4.  **Output checkpoint**: Print "Security scope filled. Running lint."
 
 ## 🎬 Phase 3.2d: Spec Lint Self-Check
 1.  Run `pactkit spec-lint docs/specs/{ID}.md`.
-2.  If ERROR rules fail, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until clean.
+2.  If any ERROR or WARNING rules fire, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until `pactkit spec-lint` reports 0 errors AND 0 warnings.
 3.  This prevents the Spec from being rejected at Act Phase 0.5.
-4.  **Output checkpoint**: Print "Spec lint passed."
+4.  **Output checkpoint**: Print "Spec lint passed (0 errors AND 0 warnings)."
 
 ## 🎬 Phase 3.3: Board, Memory & Handover
 1.  **Board**: Add Story using `add_story`.

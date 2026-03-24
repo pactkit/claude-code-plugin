@@ -1,6 +1,6 @@
 {
   "name": "pactkit",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "description": "Spec-driven agentic DevOps toolkit — PDCA workflows, role-based agents, and behavioral governance for Claude Code",
   "author": {
     "name": "PactKit",
