@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.3.5 Modular)
+# PactKit Global Constitution (v2.3.6 Modular)
 
 # Core Protocol
 
@@ -355,7 +355,7 @@ When generating **any file** (code, document, test, HTML, etc.) that will exceed
 3. **Checkpoint between blocks**: After each Edit, print a brief progress message (e.g., "Block 2/5 written.")
 4. **Never accumulate**: Do NOT compose the entire file in reasoning before writing — write as you go
 
-## Applies To — any file type over 150 lines
+## Applies To — any file type over 300 lines
 - Documents: PRD, specs, README, architecture guides
 - Source code: large modules, multi-endpoint API files, data models
 - Tests: test files with many test classes or scenarios
