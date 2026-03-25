@@ -1,4 +1,5 @@
-import re, os, sys, json, datetime, argparse, subprocess, shutil, ast
+import abc, re, os, sys, json, datetime, argparse, subprocess, shutil, ast
+from dataclasses import dataclass
 from pathlib import Path
 
 def nl(): return chr(10)
