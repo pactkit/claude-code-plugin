@@ -1,4 +1,5 @@
-import re, os, sys, json, datetime, argparse, subprocess, shutil, ast
+import abc, re, os, sys, json, datetime, argparse, subprocess, shutil, ast
+from dataclasses import dataclass
 from pathlib import Path
 
 def nl(): return chr(10)
@@ -21,17 +22,113 @@ SCAN_EXCLUDES = {
     'skills', 'commands', 'rules', 'agents',  # PactKit marketplace dirs (BUG-006)
 }
 
-MAX_SCAN_FILES = 500  # STORY-060: file count ceiling to prevent hangs on large repos
+MAX_SCAN_FILES = 500   # STORY-060: file count ceiling to prevent hangs on large repos
+MAX_WORKFLOW_NODES = 500  # STORY-slim-048: unified graph node ceiling
+
+# Canonical: src/pactkit/cleaners.py _STACK_MARKERS
+_STACK_MARKERS = [
+    ("pyproject.toml", "python"),
+    ("setup.py", "python"),
+    ("setup.cfg", "python"),
+    ("package.json", "node"),
+    ("go.mod", "go"),
+    ("pom.xml", "java"),
+    ("build.gradle", "java"),
+]
+
+# Canonical: src/pactkit/prompts/workflows.py LANG_PROFILES[*].file_ext
+_LANG_FILE_EXT = {
+    "python": ".py",
+    "node": ".ts",
+    "go": ".go",
+    "java": ".java",
+}
+
+# Canonical: src/pactkit/prompts/workflows.py LANG_PROFILES[*].test_map_pattern
+_TEST_MAP_PATTERNS = {
+    "python": "tests/unit/test_{module}.py",
+    "node": "__tests__/{module}.test.ts",
+    "go": "{package}/{module}_test.go",
+    "java": "src/test/java/{package}/{module}Test.java",
+}
 
 
-def _scan_files(root):
+def _load_scan_excludes(root):
+    """Load scan_excludes from pactkit.yaml if present. Returns list or None.
+
+    Searches .claude/pactkit.yaml then .opencode/pactkit.yaml.
+    Guarded by try/except so standalone script fails gracefully if yaml unavailable.
+    """
+    candidates = [
+        root / '.claude' / 'pactkit.yaml',
+        root / '.opencode' / 'pactkit.yaml',
+    ]
+    for path in candidates:
+        if path.exists():
+            try:
+                import yaml as _yaml
+                data = _yaml.safe_load(path.read_text(encoding='utf-8'))
+                if isinstance(data, dict):
+                    viz = data.get('visualize', {})
+                    if isinstance(viz, dict) and 'scan_excludes' in viz:
+                        excludes = viz['scan_excludes']
+                        if isinstance(excludes, list):
+                            return excludes
+            except Exception:
+                pass
+    return None
+
+
+def _detect_stack(root):
+    """Detect the stack name for the project at root.
+
+    Priority:
+    1. pactkit.yaml 'stack' field (if not 'auto' and known in _LANG_FILE_EXT)
+    2. Marker-file detection via _STACK_MARKERS
+    3. Default: 'python'
+    """
+    # 1. Try reading stack from pactkit.yaml
+    candidates = [
+        root / '.claude' / 'pactkit.yaml',
+        root / '.opencode' / 'pactkit.yaml',
+    ]
+    for path in candidates:
+        if path.exists():
+            try:
+                import yaml as _yaml
+                data = _yaml.safe_load(path.read_text(encoding='utf-8'))
+                if isinstance(data, dict):
+                    stack = data.get('stack', 'auto')
+                    if stack and stack != 'auto' and stack in _LANG_FILE_EXT:
+                        return stack
+            except Exception:
+                pass
+
+    # 2. Marker-file detection
+    for marker, stack in _STACK_MARKERS:
+        if (root / marker).exists():
+            return stack
+
+    # 3. Default
+    return 'python'
+
+
+def _detect_file_ext(root):
+    """Detect the source file extension for the project at root.
+
+    Thin wrapper around _detect_stack() that returns the file extension.
+    """
+    return _LANG_FILE_EXT.get(_detect_stack(root), '.py')
+
+
+def _scan_files(root, scan_excludes=None, file_ext='.py'):
     import sys as _sys
-    excludes = SCAN_EXCLUDES
+    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
     all_files = []
     module_index = {}
     file_to_node = {}
 
-    for p in root.rglob('*.py'):
+    for p in root.rglob(f'*{file_ext}'):
         if any(part in excludes for part in p.parts): continue
         if len(all_files) >= MAX_SCAN_FILES:
             print(f"⚠️ Scan truncated at {MAX_SCAN_FILES} files. Use --focus <module> to narrow scope.", file=_sys.stderr)
@@ -55,8 +152,344 @@ def _scan_files(root):
         except (SyntaxError, UnicodeDecodeError, ValueError): pass
     return all_files, module_index, file_to_node
 
+# --- LANGUAGE ADAPTER (STORY-slim-030) ---
+class LanguageAnalyzer(abc.ABC):
+    @abc.abstractmethod
+    def extract_imports(self, file_path) -> list:
+        """Return list of imported module name strings."""
+        ...
+
+    @abc.abstractmethod
+    def extract_functions_and_calls(self, file_path) -> tuple:
+        """Return (func_registry, call_edges) for one file."""
+        ...
+
+
+class PythonAnalyzer(LanguageAnalyzer):
+    def extract_imports(self, file_path):
+        """Parse a Python file and return a list of imported module name strings."""
+        try:
+            tree = ast.parse(file_path.read_text(encoding='utf-8'))
+            imported_modules = []
+            for n in ast.walk(tree):
+                if isinstance(n, ast.Import):
+                    for alias in n.names:
+                        imported_modules.append(alias.name)
+                elif isinstance(n, ast.ImportFrom):
+                    if n.module:
+                        imported_modules.append(n.module)
+            return imported_modules
+        except (SyntaxError, UnicodeDecodeError, ValueError):
+            return []
+
+    def extract_functions_and_calls(self, file_path):
+        """Parse a Python file and return (func_registry, call_edges) for that file."""
+        try:
+            tree = ast.parse(file_path.read_text(encoding='utf-8'))
+            rel = file_path.stem
+            func_registry = {}
+            call_edges = {}
+            for node in ast.iter_child_nodes(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    qname = node.name
+                    func_registry[qname] = rel
+                    call_edges[qname] = _extract_calls(node, current_class=None)
+                elif isinstance(node, ast.ClassDef):
+                    for item in node.body:
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            qname = f'{node.name}.{item.name}'
+                            func_registry[qname] = rel
+                            call_edges[qname] = _extract_calls(item, current_class=node.name)
+            return func_registry, call_edges
+        except (SyntaxError, UnicodeDecodeError, ValueError):
+            return {}, {}
+
+
+# --- TREE-SITTER ADAPTER (STORY-slim-032) ---
+# Guard imports: tree-sitter is optional (multilang extra)
+try:
+    from tree_sitter import Language as _TSLanguage, Parser as _TSParser, Query as _TSQuery, QueryCursor as _TSQueryCursor
+    _HAS_TREE_SITTER = True
+except ImportError:
+    _HAS_TREE_SITTER = False
+
+
+class TreeSitterAnalyzer(LanguageAnalyzer):
+    """Base class for tree-sitter-based language analyzers.
+
+    Subclasses provide language grammar and queries; this base class handles
+    parser init, file reading, error handling, and query execution.
+    """
+    def __init__(self, language, import_query, func_query, call_query, method_query=None):
+        import re as _re
+        self._re = _re
+        self._lang = _TSLanguage(language)
+        self._parser = _TSParser(self._lang)
+        self._import_query = _TSQuery(self._lang, import_query)
+        self._func_query = _TSQuery(self._lang, func_query)
+        self._call_query = _TSQuery(self._lang, call_query)
+        self._method_query = _TSQuery(self._lang, method_query) if method_query else None
+
+    def _captures(self, query, node):
+        """Run a query against a node, return dict[str, list[Node]]."""
+        cursor = _TSQueryCursor(query)
+        return cursor.captures(node)
+
+    def _matches(self, query, node):
+        """Run a query against a node, return list[tuple[int, dict[str, list[Node]]]]."""
+        cursor = _TSQueryCursor(query)
+        return cursor.matches(node)
+
+    def extract_imports(self, file_path):
+        try:
+            source = file_path.read_bytes()
+            tree = self._parser.parse(source)
+            captures = self._captures(self._import_query, tree.root_node)
+            return [n.text.decode().strip('"\'') for n in captures.get('import', [])]
+        except Exception:
+            return []
+
+    def extract_functions_and_calls(self, file_path):
+        try:
+            source = file_path.read_bytes()
+            tree = self._parser.parse(source)
+            return self._extract_funcs_and_calls(tree, file_path.stem)
+        except Exception:
+            return {}, {}
+
+    def _extract_funcs_and_calls(self, tree, stem):
+        """Override in subclasses for language-specific extraction logic."""
+        return {}, {}
+
+    def _extract_calls_from_body(self, body_node):
+        """Extract call targets from a function/method body node."""
+        calls = []
+        captures = self._captures(self._call_query, body_node)
+        callees = [n.text.decode() for n in captures.get('callee', [])]
+        calls.extend(callees)
+
+        objs = [n.text.decode() for n in captures.get('obj', [])]
+        methods = [n.text.decode() for n in captures.get('method', [])]
+        for obj, method in zip(objs, methods):
+            calls.append(f'{obj}.{method}')
+        return calls
+
+
+# Go tree-sitter queries
+_GO_IMPORT_QUERY = '(import_spec path: (interpreted_string_literal) @import)'
+
+_GO_FUNC_QUERY = '(function_declaration name: (identifier) @name body: (block) @body)'
+
+_GO_METHOD_QUERY = '''(method_declaration
+    receiver: (parameter_list (parameter_declaration type: (_) @receiver_type))
+    name: (field_identifier) @name
+    body: (block) @body)'''
+
+_GO_CALL_QUERY = '''[
+  (call_expression function: (identifier) @callee)
+  (call_expression function: (selector_expression
+    operand: (_) @obj
+    field: (field_identifier) @method))
+]'''
+
+
+class GoAnalyzer(TreeSitterAnalyzer):
+    """Go language analyzer using tree-sitter-go."""
+    def __init__(self):
+        import tree_sitter_go as _tsg
+        import re as _re
+        self._re = _re
+        self._lang = _TSLanguage(_tsg.language())
+        self._parser = _TSParser(self._lang)
+        self._import_query = _TSQuery(self._lang, _GO_IMPORT_QUERY)
+        self._func_query = _TSQuery(self._lang, _GO_FUNC_QUERY)
+        self._method_query = _TSQuery(self._lang, _GO_METHOD_QUERY)
+        self._call_query = _TSQuery(self._lang, _GO_CALL_QUERY)
+
+    def _extract_funcs_and_calls(self, tree, stem):
+        func_registry = {}
+        call_edges = {}
+
+        # Extract top-level functions
+        for _, match_dict in self._matches(self._func_query, tree.root_node):
+            names = match_dict.get('name', [])
+            bodies = match_dict.get('body', [])
+            if names and bodies:
+                qname = names[0].text.decode()
+                func_registry[qname] = stem
+                call_edges[qname] = self._extract_calls_from_body(bodies[0])
+
+        # Extract method declarations
+        for _, match_dict in self._matches(self._method_query, tree.root_node):
+            names = match_dict.get('name', [])
+            receivers = match_dict.get('receiver_type', [])
+            bodies = match_dict.get('body', [])
+            if names and bodies:
+                receiver_type = ''
+                if receivers:
+                    raw = receivers[0].text.decode()
+                    # Strip pointer (*), spaces, interface {}
+                    receiver_type = self._re.sub(r'[*& \[\]]', '', raw).strip()
+                func_name = names[0].text.decode()
+                qname = f'{receiver_type}.{func_name}' if receiver_type else func_name
+                func_registry[qname] = stem
+                call_edges[qname] = self._extract_calls_from_body(bodies[0])
+
+        return func_registry, call_edges
+
+
+# Java tree-sitter queries (STORY-slim-033)
+_JAVA_IMPORT_QUERY = '(import_declaration (scoped_identifier) @import)'
+
+_JAVA_FUNC_QUERY = '(method_declaration name: (identifier) @name body: (block) @body)'
+
+_JAVA_CONSTRUCTOR_QUERY = '(constructor_declaration name: (identifier) @name body: (constructor_body) @body)'
+
+_JAVA_CALL_QUERY = '''[
+  (method_invocation name: (identifier) @callee)
+  (method_invocation object: (_) @obj name: (identifier) @method)
+]'''
+
+
+def _find_enclosing_class(node):
+    """Walk up the tree to find the enclosing class_declaration name."""
+    current = node
+    while current:
+        if current.type == 'class_declaration':
+            name_node = current.child_by_field_name('name')
+            if name_node:
+                return name_node.text.decode()
+        current = current.parent
+    return None
+
+
+class JavaAnalyzer(TreeSitterAnalyzer):
+    """Java language analyzer using tree-sitter-java (STORY-slim-033)."""
+    def __init__(self):
+        import tree_sitter_java as _tsj
+        import re as _re
+        self._re = _re
+        self._lang = _TSLanguage(_tsj.language())
+        self._parser = _TSParser(self._lang)
+        self._import_query = _TSQuery(self._lang, _JAVA_IMPORT_QUERY)
+        self._func_query = _TSQuery(self._lang, _JAVA_FUNC_QUERY)
+        self._constructor_query = _TSQuery(self._lang, _JAVA_CONSTRUCTOR_QUERY)
+        self._call_query = _TSQuery(self._lang, _JAVA_CALL_QUERY)
+        self._method_query = None  # Java uses _func_query + _constructor_query
+
+    def _extract_funcs_and_calls(self, tree, stem):
+        func_registry = {}
+        call_edges = {}
+
+        # Extract instance and static methods
+        for _, match_dict in self._matches(self._func_query, tree.root_node):
+            names = match_dict.get('name', [])
+            bodies = match_dict.get('body', [])
+            if names and bodies:
+                name_node = names[0]
+                func_name = name_node.text.decode()
+                class_name = _find_enclosing_class(name_node)
+                qname = f'{class_name}.{func_name}' if class_name else func_name
+                func_registry[qname] = stem
+                call_edges[qname] = self._extract_calls_from_body(bodies[0])
+
+        # Extract constructors (ClassName.ClassName pattern)
+        for _, match_dict in self._matches(self._constructor_query, tree.root_node):
+            names = match_dict.get('name', [])
+            bodies = match_dict.get('body', [])
+            if names and bodies:
+                name_node = names[0]
+                ctor_name = name_node.text.decode()
+                qname = f'{ctor_name}.{ctor_name}'
+                func_registry[qname] = stem
+                call_edges[qname] = self._extract_calls_from_body(bodies[0])
+
+        return func_registry, call_edges
+
+
+# TS/JS tree-sitter queries (STORY-slim-034)
+_TS_IMPORT_QUERY = '''[
+  (import_statement source: (string) @import)
+  (export_statement source: (string) @import)
+  (call_expression
+    function: (identifier) @_func (#eq? @_func "require")
+    arguments: (arguments (string) @import))
+]'''
+
+_TS_FUNC_QUERY = '''[
+  (function_declaration name: (identifier) @name body: (statement_block) @body)
+  (method_definition name: (property_identifier) @name body: (statement_block) @body)
+  (lexical_declaration
+    (variable_declarator
+      name: (identifier) @name
+      value: [(arrow_function body: (_) @body) (function_expression body: (statement_block) @body)]))
+]'''
+
+_TS_CALL_QUERY = '''[
+  (call_expression function: (identifier) @callee)
+  (call_expression function: (member_expression
+    object: (_) @obj
+    property: (property_identifier) @method))
+]'''
+
+
+class TSAnalyzer(TreeSitterAnalyzer):
+    """TypeScript/JavaScript language analyzer using tree-sitter-typescript (STORY-slim-034)."""
+    def __init__(self):
+        import tree_sitter_typescript as _tsts
+        self._lang = _TSLanguage(_tsts.language_typescript())
+        self._parser = _TSParser(self._lang)
+        self._import_query = _TSQuery(self._lang, _TS_IMPORT_QUERY)
+        self._func_query = _TSQuery(self._lang, _TS_FUNC_QUERY)
+        self._call_query = _TSQuery(self._lang, _TS_CALL_QUERY)
+        self._method_query = None
+
+    def _extract_funcs_and_calls(self, tree, stem):
+        func_registry = {}
+        call_edges = {}
+
+        for _, match_dict in self._matches(self._func_query, tree.root_node):
+            names = match_dict.get('name', [])
+            bodies = match_dict.get('body', [])
+            if names and bodies:
+                name_node = names[0]
+                func_name = name_node.text.decode()
+                class_name = _find_enclosing_class(name_node)
+                qname = f'{class_name}.{func_name}' if class_name else func_name
+                func_registry[qname] = stem
+                call_edges[qname] = self._extract_calls_from_body(bodies[0])
+
+        return func_registry, call_edges
+
+
+def _select_analyzer(stack):
+    """Return the appropriate LanguageAnalyzer for the given stack.
+
+    Falls back to PythonAnalyzer if tree-sitter is not installed or
+    the language-specific grammar package is missing.
+    """
+    import sys as _sys
+    if stack == 'python':
+        return PythonAnalyzer()
+    if not _HAS_TREE_SITTER:
+        print(f"tree-sitter not installed; falling back to PythonAnalyzer for {stack}", file=_sys.stderr)
+        return PythonAnalyzer()
+    try:
+        if stack == 'go':
+            return GoAnalyzer()
+        if stack == 'java':
+            return JavaAnalyzer()
+        if stack == 'node':
+            return TSAnalyzer()
+    except ImportError:
+        print(f"tree-sitter-{stack} not installed; falling back to PythonAnalyzer for {stack}", file=_sys.stderr)
+    return PythonAnalyzer()
+
+
 # --- MODE: FILE (v1.3.0) ---
-def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=0, max_nodes=0):
+def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=0, max_nodes=0, analyzer=None):
+    if analyzer is None:
+        analyzer = PythonAnalyzer()
     nodes = []
     edges = []
     for f in all_files:
@@ -68,32 +501,22 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=
     adjacency = {}  # node -> set of neighbor nodes (for depth limiting)
     for p in all_files:
         consumer_id = file_to_node[p]
-        try:
-            tree = ast.parse(p.read_text(encoding='utf-8'))
-            for n in ast.walk(tree):
-                imported_modules = []
-                if isinstance(n, ast.Import):
-                    for alias in n.names:
-                        imported_modules.append(alias.name)
-                elif isinstance(n, ast.ImportFrom):
-                    if n.module: imported_modules.append(n.module)
-                for imported_module in imported_modules:
-                    tf = module_index.get(imported_module)
-                    if not tf:
-                        parts = imported_module.split('.')
-                        for i in range(len(parts), 0, -1):
-                            sub = '.'.join(parts[:i])
-                            if sub in module_index: tf = module_index[sub]; break
-                    if tf and tf != p:
-                        pid = file_to_node.get(tf)
-                        if pid:
-                            edge = (consumer_id, pid)
-                            if edge not in seen_edges:
-                                seen_edges.add(edge)
-                                edges.append(edge)
-                            adjacency.setdefault(consumer_id, set()).add(pid)
-                            adjacency.setdefault(pid, set()).add(consumer_id)
-        except (SyntaxError, UnicodeDecodeError, ValueError): pass
+        for imported_module in analyzer.extract_imports(p):
+            tf = module_index.get(imported_module)
+            if not tf:
+                parts = imported_module.split('.')
+                for i in range(len(parts), 0, -1):
+                    sub = '.'.join(parts[:i])
+                    if sub in module_index: tf = module_index[sub]; break
+            if tf and tf != p:
+                pid = file_to_node.get(tf)
+                if pid:
+                    edge = (consumer_id, pid)
+                    if edge not in seen_edges:
+                        seen_edges.add(edge)
+                        edges.append(edge)
+                    adjacency.setdefault(consumer_id, set()).add(pid)
+                    adjacency.setdefault(pid, set()).add(consumer_id)
 
     final_lines = ['graph TD']
     if focus:
@@ -219,34 +642,16 @@ def _build_class_graph(root, all_files, focus):
     return dest, nl().join(lines)
 
 # --- MODE: CALL (function-level call graph) ---
-def _build_call_graph(root, all_files, focus, entry):
-    # Pass 1: Register all functions/methods
+def _build_call_graph(root, all_files, focus, entry, analyzer=None):
+    if analyzer is None:
+        analyzer = PythonAnalyzer()
     func_registry = {}  # {qualified_name: file}
-    # Pass 2: Build call edges
     call_edges = {}  # {caller_qualified: [callee_qualified]}
 
     for p in all_files:
-        try:
-            tree = ast.parse(p.read_text(encoding='utf-8'))
-            rel = p.stem
-
-            for node in ast.iter_child_nodes(tree):
-                # Top-level functions
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    qname = node.name
-                    func_registry[qname] = rel
-                    callees = _extract_calls(node, current_class=None)
-                    call_edges[qname] = callees
-
-                # Class methods
-                elif isinstance(node, ast.ClassDef):
-                    for item in node.body:
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            qname = f'{node.name}.{item.name}'
-                            func_registry[qname] = rel
-                            callees = _extract_calls(item, current_class=node.name)
-                            call_edges[qname] = callees
-        except (SyntaxError, UnicodeDecodeError, ValueError): pass
+        fr, ce = analyzer.extract_functions_and_calls(p)
+        func_registry.update(fr)
+        call_edges.update(ce)
 
     # Pass 3: Resolve short names to qualified names where possible
     all_func_names = set(func_registry.keys())
@@ -347,26 +752,16 @@ def _resolve_callee(callee, all_func_names):
     return None
 
 # --- MODE: REVERSE CALLER BFS (STORY-053) ---
-def _scan_call_edges(root, all_files):
+def _scan_call_edges(root, all_files, analyzer=None):
     """Shared helper: build func_registry and call_edges from source. Used by forward and reverse BFS."""
+    if analyzer is None:
+        analyzer = PythonAnalyzer()
     func_registry = {}  # {qualified_name: stem}
     call_edges = {}  # {caller: [callees]}
     for p in all_files:
-        try:
-            tree = ast.parse(p.read_text(encoding='utf-8'))
-            rel = p.stem
-            for node in ast.iter_child_nodes(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    qname = node.name
-                    func_registry[qname] = rel
-                    call_edges[qname] = _extract_calls(node, current_class=None)
-                elif isinstance(node, ast.ClassDef):
-                    for item in node.body:
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            qname = f'{node.name}.{item.name}'
-                            func_registry[qname] = rel
-                            call_edges[qname] = _extract_calls(item, current_class=node.name)
-        except (SyntaxError, UnicodeDecodeError, ValueError): pass
+        fr, ce = analyzer.extract_functions_and_calls(p)
+        func_registry.update(fr)
+        call_edges.update(ce)
     return func_registry, call_edges
 
 
@@ -407,15 +802,45 @@ def _build_reverse_graph(func_registry, call_edges, entry):
     return visited, reverse_edges
 
 
-# --- impact() subcommand (STORY-053) ---
+def _resolve_test_path(root, stem, source_file, stack):
+    """Resolve the test file path for a given source file using _TEST_MAP_PATTERNS.
+
+    Returns a Path if the resolved test file exists, or None otherwise.
+    """
+    pattern = _TEST_MAP_PATTERNS.get(stack, "tests/unit/test_{module}.py")
+    module = stem
+    package = str(source_file.parent.relative_to(root)).replace(os.sep, '/')
+    resolved = pattern.replace("{module}", module).replace("{package}", package)
+    test_path = root / resolved
+    return test_path if test_path.exists() else None
+
+
+# --- impact() subcommand (STORY-053, STORY-slim-031) ---
 def impact(target='.', entry=None):
     """Find test files impacted by a changed function (reverse BFS + test mapping).
     Returns a space-separated list of test file paths, or empty string if none found.
     """
     if not entry: return ''
     root = Path(target).resolve()
-    all_files, module_index, file_to_node = _scan_files(root)
-    func_registry, call_edges = _scan_call_edges(root, all_files)
+    scan_excludes = _load_scan_excludes(root)
+    stack = _detect_stack(root)
+    # Multi-extension scanning for Node projects (STORY-slim-034 R5)
+    if stack == 'node':
+        files_ts, mi_ts, ftn_ts = _scan_files(root, scan_excludes=scan_excludes, file_ext='.ts')
+        files_js, mi_js, ftn_js = _scan_files(root, scan_excludes=scan_excludes, file_ext='.js')
+        all_files = files_ts + files_js
+        module_index = {**mi_ts, **mi_js}
+        file_to_node = {**ftn_ts, **ftn_js}
+    else:
+        file_ext = _detect_file_ext(root)
+        all_files, module_index, file_to_node = _scan_files(root, scan_excludes=scan_excludes, file_ext=file_ext)
+    analyzer = _select_analyzer(stack)
+    func_registry, call_edges = _scan_call_edges(root, all_files, analyzer=analyzer)
+
+    # Build stem → source_file index for {package} resolution
+    stem_to_file = {}
+    for f in all_files:
+        stem_to_file.setdefault(f.stem, f)
 
     visited, _ = _build_reverse_graph(func_registry, call_edges, entry)
     if not visited: return ''
@@ -423,25 +848,72 @@ def impact(target='.', entry=None):
     test_files = set()
     for func_name in visited:
         stem = func_registry.get(func_name)
-        if stem:
-            # Python pattern: src/pactkit/config.py → tests/unit/test_config.py
-            test_path = root / 'tests' / 'unit' / f'test_{stem}.py'
-            if test_path.exists():
+        if not stem:
+            continue
+        source_file = stem_to_file.get(stem)
+        if source_file:
+            # Try pattern-based resolution first
+            test_path = _resolve_test_path(root, stem, source_file, stack)
+            if test_path:
                 test_files.add(str(test_path.relative_to(root)))
+                continue
+        # Fallback: hardcoded Python convention
+        fallback_path = root / 'tests' / 'unit' / f'test_{stem}.py'
+        if fallback_path.exists():
+            test_files.add(str(fallback_path.relative_to(root)))
     return ' '.join(sorted(test_files))
 
 
 # --- MAIN VISUALIZE (v1.3.0 Multi-Mode) ---
-def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False):
+def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False, lazy=False):
     root = Path(target).resolve()
-    all_files, module_index, file_to_node = _scan_files(root)
+
+    # --- Workflow mode (STORY-slim-036) ---
+    if mode == 'workflow':
+        dest = root / 'docs' / 'architecture' / 'graphs' / 'workflow_graph.mmd'
+        if lazy and dest.exists():
+            # Check staleness: compare mmd mtime against command/skill/rule files
+            mmd_mtime = dest.stat().st_mtime
+            stale = False
+            for check_dir_name in ['.claude/commands', '.claude/skills', '.claude/rules',
+                                   'commands', 'skills', 'rules']:
+                check_dir = root / check_dir_name
+                if check_dir.is_dir():
+                    for f in check_dir.rglob('*'):
+                        if f.is_file() and f.stat().st_mtime > mmd_mtime:
+                            stale = True
+                            break
+                if stale:
+                    break
+            if not stale:
+                return f'Workflow graph up-to-date — skip regeneration: {dest}'
+        graph = build_workflow_graph(root=root)
+        content = graph.to_mermaid()
+        if not dest.parent.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(content, encoding='utf-8')
+        return f'✅ Graph: {dest}'
+
+    scan_excludes = _load_scan_excludes(root)
+    stack = _detect_stack(root)
+    # Multi-extension scanning for Node projects (STORY-slim-034 R5)
+    if stack == 'node':
+        files_ts, mi_ts, ftn_ts = _scan_files(root, scan_excludes=scan_excludes, file_ext='.ts')
+        files_js, mi_js, ftn_js = _scan_files(root, scan_excludes=scan_excludes, file_ext='.js')
+        all_files = files_ts + files_js
+        module_index = {**mi_ts, **mi_js}
+        file_to_node = {**ftn_ts, **ftn_js}
+    else:
+        file_ext = _detect_file_ext(root)
+        all_files, module_index, file_to_node = _scan_files(root, scan_excludes=scan_excludes, file_ext=file_ext)
+    analyzer = _select_analyzer(stack)
 
     if mode == 'class':
         dest, content = _build_class_graph(root, all_files, focus)
     elif mode == 'call':
         if entry and reverse:
             # Reverse BFS: find all callers of the entry function
-            func_registry, call_edges = _scan_call_edges(root, all_files)
+            func_registry, call_edges = _scan_call_edges(root, all_files, analyzer=analyzer)
             visited, reverse_edges = _build_reverse_graph(func_registry, call_edges, entry)
             lines = ['graph TD']
             safe = lambda s: s.replace('.', '_')
@@ -453,9 +925,9 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
             if focus: dest = root / 'docs/architecture/graphs/focus_call_graph.mmd'
             content = nl().join(lines)
         else:
-            dest, content = _build_call_graph(root, all_files, focus, entry)
+            dest, content = _build_call_graph(root, all_files, focus, entry, analyzer=analyzer)
     else:
-        dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes)
+        dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes, analyzer=analyzer)
         if dest is None: return content  # error message
 
     if not dest.parent.exists(): dest.parent.mkdir(parents=True, exist_ok=True)
@@ -463,6 +935,1060 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
     return f'✅ Graph: {dest}'
 
 def list_rules(): return 'Rules defined in ~/.claude/CLAUDE.md'
+
+
+# --- WORKFLOW GRAPH (STORY-slim-035) ---
+
+
+@dataclass
+class WorkflowNode:
+    id: str
+    kind: str   # 'command', 'agent', 'skill', 'file'
+    label: str
+
+
+@dataclass
+class WorkflowEdge:
+    source: str
+    target: str
+    relation: str  # 'invokes', 'depends_on', 'reads', 'writes', 'contains'
+
+
+
+# STORY-slim-048: Map node kind to display dimension for layered to_mermaid()
+_KIND_TO_DIMENSION: dict[str, str] = {
+    'function': 'Code Dimension',
+    'class': 'Code Dimension',
+    'command': 'PDCA Topology',
+    'agent': 'PDCA Topology',
+    'skill': 'PDCA Topology',
+    'file': 'PDCA Topology',
+    'service': 'Service Topology',
+    'api': 'Service Topology',
+    'topic': 'Service Topology',
+    'page': 'Frontend Topology',
+    'component': 'Frontend Topology',
+    'hook': 'Frontend Topology',
+    'store': 'Frontend Topology',
+}
+
+
+class WorkflowGraph:
+    def __init__(self):
+        self.nodes: dict[str, WorkflowNode] = {}
+        self.edges: list[WorkflowEdge] = []
+        self.layered: bool = False  # STORY-slim-048: set True by build_unified_graph
+
+    def add_node(self, node: WorkflowNode):
+        if node.id not in self.nodes:
+            self.nodes[node.id] = node
+
+    def add_edge(self, edge: WorkflowEdge):
+        key = (edge.source, edge.target, edge.relation)
+        if not hasattr(self, '_edge_keys'):
+            self._edge_keys = set()
+        if key not in self._edge_keys:
+            self._edge_keys.add(key)
+            self.edges.append(edge)
+
+    @staticmethod
+    def _sanitize_id(raw: str) -> str:
+        """Sanitize a string for use as a Mermaid node ID."""
+        return re.sub(r'[^a-zA-Z0-9_]', '_', raw)
+
+    def to_mermaid(self) -> str:
+        lines = ['graph TD']
+        if self.layered:
+            # STORY-slim-048 R3: Group by dimension for unified/layered graphs
+            _dim_order = ['Code Dimension', 'PDCA Topology', 'Service Topology', 'Frontend Topology']
+            dimension_nodes: dict[str, list[WorkflowNode]] = {}
+            for n in self.nodes.values():
+                dim = _KIND_TO_DIMENSION.get(n.kind, n.kind.title() + ' Topology')
+                dimension_nodes.setdefault(dim, []).append(n)
+            all_dims = sorted(dimension_nodes.keys())
+            dim_order = [d for d in _dim_order if d in dimension_nodes] + [
+                d for d in all_dims if d not in _dim_order
+            ]
+            for dim in dim_order:
+                nodes = dimension_nodes.get(dim, [])
+                if not nodes:
+                    continue
+                lines.append(f'    subgraph "{dim}"')
+                for n in sorted(nodes, key=lambda x: x.id):
+                    sid = self._sanitize_id(n.id)
+                    lines.append(f'        {sid}["{n.label}"]')
+                lines.append('    end')
+        else:
+            # STORY-slim-041 R6: Dynamic kind discovery — known PDCA kinds first, then any new kinds
+            _known_order = ['command', 'agent', 'skill', 'file']
+            _known_labels = {'command': 'Commands', 'agent': 'Agents', 'skill': 'Skills', 'file': 'Files'}
+            all_kinds = sorted({n.kind for n in self.nodes.values()})
+            kind_order = [k for k in _known_order if k in all_kinds] + [k for k in all_kinds if k not in _known_order]
+            kind_labels = {**_known_labels, **{k: k.title() + 's' for k in all_kinds if k not in _known_labels}}
+            for kind in kind_order:
+                nodes_of_kind = [n for n in self.nodes.values() if n.kind == kind]
+                if not nodes_of_kind:
+                    continue
+                lines.append(f'    subgraph {kind_labels[kind]}')
+                for n in sorted(nodes_of_kind, key=lambda x: x.id):
+                    sid = self._sanitize_id(n.id)
+                    lines.append(f'        {sid}["{n.label}"]')
+                lines.append('    end')
+        for e in self.edges:
+            src = self._sanitize_id(e.source)
+            dst = self._sanitize_id(e.target)
+            arrow = '-.->' if e.relation == 'sequence' else '-->'
+            lines.append(f'    {src} {arrow}|{e.relation}| {dst}')
+        return nl().join(lines)
+
+    def reverse_reach(self, entry_id: str) -> set[str]:
+        """Reverse BFS from entry_id — follow edges backward (target→source)."""
+        reverse_map: dict[str, list[str]] = {}
+        for e in self.edges:
+            reverse_map.setdefault(e.target, []).append(e.source)
+        visited: set[str] = set()
+        queue = [entry_id]
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            for src in reverse_map.get(current, []):
+                if src not in visited:
+                    queue.append(src)
+        return visited
+
+
+class TopologyParser(abc.ABC):
+    """Abstract base class for topology-specific workflow parsers (STORY-slim-040 R1).
+
+    Subclasses declare `markers` and implement `parse()`.
+    The default `detect()` checks if any marker file/dir exists under root.
+    """
+    markers: list[str] = []
+
+    def detect(self, root) -> bool:
+        root = Path(root)
+        for marker in self.markers:
+            if (root / marker).exists():
+                return True
+        return False
+
+    @abc.abstractmethod
+    def parse(self, root) -> WorkflowGraph:
+        ...
+
+
+# STORY-slim-040 R2: Topology marker lists for auto-detection
+_TOPOLOGY_MARKERS: dict[str, list[str]] = {
+    'pdca': ['.claude/commands/', 'commands/', '.claude/pactkit.yaml', 'pactkit.yaml'],
+    'service': ['docker-compose.yml', 'docker-compose.yaml', 'kubernetes/', 'k8s/', 'openapi.yaml', 'swagger.json'],
+    'frontend': ['next.config.js', 'next.config.ts', 'nuxt.config.ts', 'vite.config.ts', 'app/layout.tsx', 'pages/_app.tsx', 'src/router/', 'src/store/'],
+}
+
+
+def detect_topology(root) -> list[str]:
+    """Scan project root using registered parser detect() methods (STORY-slim-040 R3).
+
+    Delegates to _TOPOLOGY_PARSERS registry so each parser uses its own canonical markers.
+    Falls back to _TOPOLOGY_MARKERS for any topology not yet registered.
+    """
+    root = Path(root)
+    matched = []
+    checked = set()
+    # First pass: use registered parsers (most accurate — uses each parser's own markers)
+    for name, parser in _TOPOLOGY_PARSERS.items():
+        if parser.detect(root):
+            matched.append(name)
+        checked.add(name)
+    # Second pass: fall back to _TOPOLOGY_MARKERS for unregistered topologies
+    for name, markers in _TOPOLOGY_MARKERS.items():
+        if name in checked:
+            continue
+        for marker in markers:
+            if (root / marker).exists():
+                matched.append(name)
+                break
+    return matched
+
+
+# STORY-slim-040 R4: Registry — populated by subclass stories (041, 042, 045)
+_TOPOLOGY_PARSERS: dict[str, TopologyParser] = {}
+
+
+class PdcaParser(TopologyParser):
+    """PDCA topology parser — wraps existing command/routing/skill parsers (STORY-slim-041 R1).
+
+    Declared kind_order and kind_labels for PDCA topology.
+    """
+    markers = ['.claude/commands/', 'commands/', '.claude/pactkit.yaml', '.opencode/pactkit.yaml']
+    kind_order = ['command', 'agent', 'skill', 'file']
+    kind_labels = {'command': 'Commands', 'agent': 'Agents', 'skill': 'Skills', 'file': 'Files'}
+
+    def detect(self, root) -> bool:
+        root = Path(root)
+        for marker in self.markers:
+            if (root / marker).exists():
+                return True
+        return False
+
+    def parse(self, root, commands_dir=None, rules_dir=None, skills_dir=None) -> WorkflowGraph:
+        root = Path(root)
+        # Directory discovery (moved from build_workflow_graph per R3)
+        if commands_dir is None:
+            for candidate in [root / '.claude' / 'commands', root / 'commands']:
+                if candidate.is_dir():
+                    commands_dir = candidate
+                    break
+            if commands_dir is None:
+                home_cmd = Path.home() / '.claude' / 'commands'
+                if home_cmd.is_dir():
+                    commands_dir = home_cmd
+        if rules_dir is None:
+            for candidate in [root / '.claude' / 'rules', root / 'rules']:
+                if candidate.is_dir():
+                    rules_dir = candidate
+                    break
+            if rules_dir is None:
+                home_rules = Path.home() / '.claude' / 'rules'
+                if home_rules.is_dir():
+                    rules_dir = home_rules
+        if skills_dir is None:
+            for candidate in [root / '.claude' / 'skills', root / 'skills']:
+                if candidate.is_dir():
+                    skills_dir = candidate
+                    break
+            if skills_dir is None:
+                home_skills = Path.home() / '.claude' / 'skills'
+                if home_skills.is_dir():
+                    skills_dir = home_skills
+
+        graph = WorkflowGraph()
+        if commands_dir:
+            _parse_commands(commands_dir, graph)
+        if rules_dir:
+            _parse_routing_table(rules_dir, graph)
+        if skills_dir:
+            _scan_skill_files(skills_dir, graph)
+        if commands_dir:
+            _parse_pdca_sequence(commands_dir, graph)
+        return graph
+
+
+# STORY-slim-041 R2: Register PdcaParser
+_TOPOLOGY_PARSERS['pdca'] = PdcaParser()
+
+
+def _parse_docker_compose(root, graph: WorkflowGraph):
+    """Parse docker-compose.yml/yaml for service nodes and depends_on/links edges (STORY-slim-042 R2)."""
+    try:
+        import yaml
+    except ImportError:
+        return
+    for name in ('docker-compose.yml', 'docker-compose.yaml'):
+        dc_path = Path(root) / name
+        if dc_path.exists():
+            try:
+                data = yaml.safe_load(dc_path.read_text(encoding='utf-8'))
+            except Exception:
+                return
+            if not isinstance(data, dict):
+                return
+            services = data.get('services') or {}
+            for svc_name, svc_conf in services.items():
+                graph.add_node(WorkflowNode(id=svc_name, kind='service', label=svc_name))
+                if not isinstance(svc_conf, dict):
+                    continue
+                # depends_on — list or dict form
+                deps = svc_conf.get('depends_on', [])
+                if isinstance(deps, dict):
+                    deps = list(deps.keys())
+                for dep in deps:
+                    graph.add_node(WorkflowNode(id=dep, kind='service', label=dep))
+                    graph.add_edge(WorkflowEdge(source=svc_name, target=dep, relation='depends_on'))
+                # links
+                for link in svc_conf.get('links', []):
+                    link_name = link.split(':')[0]
+                    graph.add_node(WorkflowNode(id=link_name, kind='service', label=link_name))
+                    graph.add_edge(WorkflowEdge(source=svc_name, target=link_name, relation='depends_on'))
+            return  # only parse first found
+
+
+def _parse_openapi(root, graph: WorkflowGraph):
+    """Parse openapi.yaml or swagger.json for API path nodes (STORY-slim-042 R3)."""
+    root = Path(root)
+    data = None
+    for name in ('openapi.yaml', 'openapi.yml'):
+        p = root / name
+        if p.exists():
+            try:
+                import yaml
+                data = yaml.safe_load(p.read_text(encoding='utf-8'))
+            except Exception:
+                pass
+            break
+    if data is None:
+        swagger_path = root / 'swagger.json'
+        if swagger_path.exists():
+            try:
+                import json as _json
+                data = _json.loads(swagger_path.read_text(encoding='utf-8'))
+            except Exception:
+                pass
+    if not isinstance(data, dict):
+        return
+    # Extract service name from info.title
+    info = data.get('info', {})
+    svc_title = info.get('title', 'UnknownService')
+    svc_id = re.sub(r'[^a-zA-Z0-9]', '-', svc_title).strip('-').lower()
+    graph.add_node(WorkflowNode(id=svc_id, kind='service', label=svc_title))
+    # Extract paths
+    for path_str, methods in (data.get('paths') or {}).items():
+        if not isinstance(methods, dict):
+            continue
+        for method in methods:
+            if method.lower() in ('get', 'post', 'put', 'patch', 'delete', 'head', 'options'):
+                api_label = f'{method.upper()} {path_str}'
+                api_id = re.sub(r'[^a-zA-Z0-9]', '_', api_label).strip('_').lower()
+                graph.add_node(WorkflowNode(id=api_id, kind='api', label=api_label))
+                graph.add_edge(WorkflowEdge(source=svc_id, target=api_id, relation='calls_api'))
+
+
+def _parse_proto_files(root, graph: WorkflowGraph):
+    """Scan *.proto files for service/rpc declarations (STORY-slim-042 R4)."""
+    root = Path(root)
+    svc_pattern = re.compile(r'service\s+(\w+)\s*\{')
+    rpc_pattern = re.compile(r'rpc\s+(\w+)\s*\(')
+    for proto in sorted(root.glob('**/*.proto')):
+        content = proto.read_text(encoding='utf-8')
+        current_svc = None
+        for line in content.split('\n'):
+            svc_m = svc_pattern.search(line)
+            if svc_m:
+                current_svc = svc_m.group(1)
+                graph.add_node(WorkflowNode(id=current_svc, kind='service', label=current_svc))
+            rpc_m = rpc_pattern.search(line)
+            if rpc_m and current_svc:
+                rpc_name = rpc_m.group(1)
+                rpc_id = f'{current_svc}/{rpc_name}'
+                graph.add_node(WorkflowNode(id=rpc_id, kind='api', label=rpc_name))
+                graph.add_edge(WorkflowEdge(source=current_svc, target=rpc_id, relation='calls_api'))
+
+
+def _parse_mq_config(root, graph: WorkflowGraph):
+    """Detect MQ topics from docker-compose environment variables (STORY-slim-044 R3).
+
+    Scans for KAFKA_TOPIC, *_QUEUE_URL, *_TOPIC_ARN patterns in service environment blocks.
+    Services with KAFKA_CONSUMER_GROUP are treated as subscribers; others as publishers.
+    """
+    try:
+        import yaml
+    except ImportError:
+        return
+    root = Path(root)
+    for name in ('docker-compose.yml', 'docker-compose.yaml'):
+        dc_path = root / name
+        if dc_path.exists():
+            try:
+                data = yaml.safe_load(dc_path.read_text(encoding='utf-8'))
+            except Exception:
+                return
+            if not isinstance(data, dict):
+                return
+            services = data.get('services') or {}
+            topic_env_pattern = re.compile(r'(?:KAFKA_TOPIC|(\w+)_QUEUE_URL|(\w+)_TOPIC_ARN)')
+            for svc_name, svc_conf in services.items():
+                if not isinstance(svc_conf, dict):
+                    continue
+                env = svc_conf.get('environment', [])
+                # Normalize env: list of "K=V" or dict
+                env_pairs = {}
+                if isinstance(env, list):
+                    for item in env:
+                        if '=' in str(item):
+                            k, v = str(item).split('=', 1)
+                            env_pairs[k.strip()] = v.strip()
+                elif isinstance(env, dict):
+                    env_pairs = {str(k): str(v) for k, v in env.items()}
+                has_consumer_group = any('CONSUMER_GROUP' in k for k in env_pairs)
+                for key, val in env_pairs.items():
+                    if 'CONSUMER_GROUP' in key:
+                        continue
+                    m = topic_env_pattern.match(key)
+                    if m:
+                        if key == 'KAFKA_TOPIC':
+                            topic_name = val
+                        elif m.group(1):  # _QUEUE_URL
+                            topic_name = key.rsplit('_QUEUE_URL', 1)[0].lower().replace('_', '-')
+                        elif m.group(2):  # _TOPIC_ARN
+                            topic_name = key.rsplit('_TOPIC_ARN', 1)[0].lower().replace('_', '-')
+                        else:
+                            continue
+                        graph.add_node(WorkflowNode(id=topic_name, kind='topic', label=topic_name))
+                        graph.add_node(WorkflowNode(id=svc_name, kind='service', label=svc_name))
+                        if has_consumer_group:
+                            graph.add_edge(WorkflowEdge(source=topic_name, target=svc_name, relation='subscribes'))
+                        else:
+                            graph.add_edge(WorkflowEdge(source=svc_name, target=topic_name, relation='publishes'))
+            return
+
+
+def _scan_mq_source_patterns(root, graph: WorkflowGraph):
+    """Scan source code for MQ producer/consumer patterns (STORY-slim-044 R4).
+
+    Detects: producer.send("topic"), @KafkaListener(topics="topic"),
+    channel.publish/consume, KafkaTemplate.send().
+    """
+    root = Path(root)
+    patterns = [
+        re.compile(r'producer\.send\(\s*["\']([^"\']+)["\']\s*'),          # Python/generic
+        re.compile(r'KafkaTemplate\.send\(\s*["\']([^"\']+)["\']\s*'),     # Java Spring
+        re.compile(r'@KafkaListener\(\s*topics\s*=\s*["\']([^"\']+)["\']\s*'),  # Java Spring
+        re.compile(r'channel\.publish\(\s*["\']([^"\']+)["\']\s*'),        # Node.js
+        re.compile(r'channel\.consume\(\s*["\']([^"\']+)["\']\s*'),        # Node.js
+        re.compile(r'@app\.task\(\s*name\s*=\s*["\']([^"\']+)["\']\s*'),   # Celery
+    ]
+    consumer_keywords = {'KafkaListener', 'consume', 'subscribe'}
+    # Find service dirs by looking at docker-compose build contexts
+    service_dirs = {}
+    try:
+        import yaml
+        for name in ('docker-compose.yml', 'docker-compose.yaml'):
+            dc_path = root / name
+            if dc_path.exists():
+                data = yaml.safe_load(dc_path.read_text(encoding='utf-8'))
+                if isinstance(data, dict):
+                    for svc_name, svc_conf in (data.get('services') or {}).items():
+                        if isinstance(svc_conf, dict) and svc_conf.get('build'):
+                            build_ctx = svc_conf['build']
+                            if isinstance(build_ctx, dict):
+                                build_ctx = build_ctx.get('context', '.')
+                            service_dirs[str(root / build_ctx)] = svc_name
+                break
+    except Exception:
+        pass
+    if not service_dirs:
+        return
+    for svc_dir_str, svc_name in service_dirs.items():
+        svc_dir = Path(svc_dir_str)
+        if not svc_dir.is_dir():
+            continue
+        for ext in ('**/*.py', '**/*.java', '**/*.js', '**/*.ts', '**/*.go'):
+            for src_file in svc_dir.glob(ext):
+                try:
+                    content = src_file.read_text(encoding='utf-8', errors='replace')
+                except Exception:
+                    continue
+                for pat in patterns:
+                    for m in pat.finditer(content):
+                        topic_name = m.group(1)
+                        graph.add_node(WorkflowNode(id=topic_name, kind='topic', label=topic_name))
+                        graph.add_node(WorkflowNode(id=svc_name, kind='service', label=svc_name))
+                        is_consumer = any(kw in pat.pattern for kw in consumer_keywords)
+                        if is_consumer:
+                            graph.add_edge(WorkflowEdge(source=topic_name, target=svc_name, relation='subscribes'))
+                        else:
+                            graph.add_edge(WorkflowEdge(source=svc_name, target=topic_name, relation='publishes'))
+
+
+class ServiceParser(TopologyParser):
+    """Service topology parser for microservice architectures (STORY-slim-042 R1)."""
+    markers = ['docker-compose.yml', 'docker-compose.yaml', 'openapi.yaml', 'swagger.json']
+    kind_order = ['service', 'api', 'topic']
+    kind_labels = {'service': 'Services', 'api': 'APIs', 'topic': 'Topics'}
+
+    def parse(self, root) -> WorkflowGraph:
+        graph = WorkflowGraph()
+        _parse_docker_compose(root, graph)
+        _parse_openapi(root, graph)
+        _parse_proto_files(root, graph)
+        _parse_mq_config(root, graph)
+        _scan_mq_source_patterns(root, graph)
+        return graph
+
+
+# STORY-slim-042 R5: Register ServiceParser
+_TOPOLOGY_PARSERS['service'] = ServiceParser()
+
+
+# --- Frontend Topology (STORY-slim-045, 046) ---
+
+def _is_local_import(src: str) -> bool:
+    """Returns True if the import source is a local project path (not an npm package)."""
+    return src.startswith('./') or src.startswith('../') or src.startswith('@/')
+
+
+def _parse_app_router_pages(root, graph: WorkflowGraph) -> list:
+    """Parse Next.js App Router pages (app/**/page.tsx|jsx) (STORY-slim-045 R2).
+
+    Returns list of (route_id, file_path) tuples for downstream import analysis.
+    """
+    root = Path(root)
+    app_dir = root / 'app'
+    if not app_dir.is_dir():
+        return []
+    page_files = []
+    for ext in ('page.tsx', 'page.jsx'):
+        for p in sorted(app_dir.rglob(ext)):
+            rel = p.parent.relative_to(app_dir)
+            route = '/' + rel.as_posix() if rel.parts else '/'
+            graph.add_node(WorkflowNode(id=route, kind='page', label=route))
+            page_files.append((route, p))
+    return page_files
+
+
+def _parse_pages_router(root, graph: WorkflowGraph) -> list:
+    """Parse Next.js Pages Router (pages/**/*.tsx) (STORY-slim-045 R3).
+
+    Returns list of (route_id, file_path) tuples.
+    Excludes _app.tsx and _document.tsx.
+    """
+    root = Path(root)
+    pages_dir = root / 'pages'
+    if not pages_dir.is_dir():
+        return []
+    page_files = []
+    for p in sorted(pages_dir.rglob('*.tsx')):
+        if p.name.startswith('_'):
+            continue
+        rel = p.relative_to(pages_dir)
+        route_name = rel.with_suffix('').as_posix()
+        if route_name == 'index':
+            route = '/'
+        elif route_name.endswith('/index'):
+            route = '/' + route_name[:-len('/index')]
+        else:
+            route = '/' + route_name
+        graph.add_node(WorkflowNode(id=route, kind='page', label=route))
+        page_files.append((route, p))
+    return page_files
+
+
+def _parse_vue_routes(root, graph: WorkflowGraph) -> list:
+    """Parse Vue Router route definitions from src/router/index.ts (STORY-slim-045 R4).
+
+    Returns list of (route_id, None) tuples (no file_path since imports are inline).
+    """
+    root = Path(root)
+    router_path = None
+    for candidate in [root / 'src/router/index.ts', root / 'src/router/index.js']:
+        if candidate.exists():
+            router_path = candidate
+            break
+    if router_path is None:
+        return []
+    try:
+        content = router_path.read_text(encoding='utf-8')
+    except Exception:
+        return []
+    _skip_keywords = {'createRouter', 'createWebHistory', 'createWebHashHistory', 'Vue', 'defineComponent'}
+    path_pattern = re.compile(r"path:\s*['\"]([^'\"]+)['\"]")
+    comp_pattern = re.compile(r"component:\s*(\w+)")
+    path_matches = list(path_pattern.finditer(content))
+    comp_matches = list(comp_pattern.finditer(content))
+    page_files = []
+    for pm in path_matches:
+        route = pm.group(1)
+        graph.add_node(WorkflowNode(id=route, kind='page', label=route))
+        for cm in comp_matches:
+            if cm.start() > pm.start():
+                comp_name = cm.group(1)
+                if comp_name not in _skip_keywords:
+                    graph.add_node(WorkflowNode(id=comp_name, kind='component', label=comp_name))
+                    graph.add_edge(WorkflowEdge(source=route, target=comp_name, relation='renders'))
+                break
+        page_files.append((route, None))
+    return page_files
+
+
+def _parse_component_imports(page_files: list, graph: WorkflowGraph) -> None:
+    """Parse import statements from page files to create component nodes and renders edges (STORY-slim-045 R5).
+
+    Only tracks local project imports (not npm packages).
+    page_files: list of (page_id, file_path) tuples.
+    """
+    default_import = re.compile(r"import\s+(\w+)\s+from\s+['\"]([^'\"]+)['\"]")
+    named_import = re.compile(r"import\s+\{([^}]+)\}\s+from\s+['\"]([^'\"]+)['\"]")
+    for page_id, file_path in page_files:
+        if file_path is None:
+            continue
+        try:
+            content = Path(file_path).read_text(encoding='utf-8', errors='replace')
+        except Exception:
+            continue
+        # Default imports: import ComponentName from './path'
+        for m in default_import.finditer(content):
+            name, src = m.group(1), m.group(2)
+            if _is_local_import(src):
+                graph.add_node(WorkflowNode(id=name, kind='component', label=name))
+                graph.add_edge(WorkflowEdge(source=page_id, target=name, relation='renders'))
+        # Named imports: import { Button, Card } from './path'
+        for m in named_import.finditer(content):
+            names_str, src = m.group(1), m.group(2)
+            if _is_local_import(src):
+                for n in names_str.split(','):
+                    n = n.strip().split(' as ')[0].strip()
+                    if n and n[0].isupper():  # convention: components are PascalCase
+                        graph.add_node(WorkflowNode(id=n, kind='component', label=n))
+                        graph.add_edge(WorkflowEdge(source=page_id, target=n, relation='renders'))
+
+
+def _scan_hooks(root, graph: WorkflowGraph) -> list:
+    """Scan hook directories and add hook nodes to the graph (STORY-slim-046 R1, R3).
+
+    Returns list of (hook_id, file_path) tuples for downstream import analysis.
+    Scans: src/hooks/, composables/, src/composables/.
+    Only files with 'use' prefix are treated as hooks.
+    """
+    root = Path(root)
+    hook_dirs = [root / 'src/hooks', root / 'composables', root / 'src/composables']
+    result = []
+    for hook_dir in hook_dirs:
+        if not hook_dir.is_dir():
+            continue
+        for f in sorted(list(hook_dir.glob('*.ts')) + list(hook_dir.glob('*.js'))):
+            stem = f.stem
+            if stem.startswith('use'):
+                graph.add_node(WorkflowNode(id=stem, kind='hook', label=stem))
+                result.append((stem, f))
+    return result
+
+
+def _scan_stores(root, graph: WorkflowGraph) -> list:
+    """Scan store directories and add store nodes to the graph (STORY-slim-046 R2, R4).
+
+    Returns list of (store_id, file_path) tuples for downstream import analysis.
+    Scans: src/store/, src/stores/, src/slices/.
+    Files using createSlice/create/defineStore are treated as stores.
+    """
+    root = Path(root)
+    store_dirs = [root / 'src/store', root / 'src/stores', root / 'src/slices']
+    store_patterns = [
+        re.compile(r'createSlice\('),   # Redux
+        re.compile(r'\bcreate\('),      # Zustand
+        re.compile(r'defineStore\('),   # Pinia
+    ]
+    result = []
+    for store_dir in store_dirs:
+        if not store_dir.is_dir():
+            continue
+        for f in sorted(list(store_dir.glob('*.ts')) + list(store_dir.glob('*.js'))):
+            try:
+                content = f.read_text(encoding='utf-8', errors='replace')
+            except Exception:
+                continue
+            stem = f.stem
+            if any(pat.search(content) for pat in store_patterns):
+                graph.add_node(WorkflowNode(id=stem, kind='store', label=stem))
+                result.append((stem, f))
+    return result
+
+
+def _parse_hook_store_imports(node_files: list, graph: WorkflowGraph) -> None:
+    """Parse imports to create uses_hook and reads_store edges (STORY-slim-046 R3-R5).
+
+    node_files: list of (any, node_id, file_path) tuples.
+    Creates:
+    - component/page → hook: uses_hook edge
+    - hook → store: reads_store edge
+    """
+    default_import = re.compile(r"import\s+\{?(\w+)\}?\s+from\s+['\"]([^'\"]+)['\"]")
+    named_import = re.compile(r"import\s+\{([^}]+)\}\s+from\s+['\"]([^'\"]+)['\"]")
+    hook_ids = {nid for nid, n in graph.nodes.items() if n.kind == 'hook'}
+    store_ids = {nid for nid, n in graph.nodes.items() if n.kind == 'store'}
+    for _, node_id, file_path in node_files:
+        if file_path is None:
+            continue
+        try:
+            content = Path(file_path).read_text(encoding='utf-8', errors='replace')
+        except Exception:
+            continue
+        imported = set()
+        for m in default_import.finditer(content):
+            name, src = m.group(1), m.group(2)
+            if _is_local_import(src):
+                imported.add(name)
+        for m in named_import.finditer(content):
+            names_str, src = m.group(1), m.group(2)
+            if _is_local_import(src):
+                for n in names_str.split(','):
+                    imported.add(n.strip().split(' as ')[0].strip())
+        for imported_name in imported:
+            if imported_name in hook_ids:
+                graph.add_edge(WorkflowEdge(source=node_id, target=imported_name, relation='uses_hook'))
+            elif imported_name in store_ids:
+                graph.add_edge(WorkflowEdge(source=node_id, target=imported_name, relation='reads_store'))
+
+
+class FrontendParser(TopologyParser):
+    """Frontend topology parser for Next.js/Nuxt/Vue projects (STORY-slim-045 R1).
+
+    Phase 1 (STORY-slim-045): page nodes, component nodes, renders edges.
+    Phase 2 (STORY-slim-046): hook nodes, store nodes, uses_hook/reads_store edges.
+    """
+    markers = [
+        'next.config.js', 'next.config.ts', 'nuxt.config.ts', 'vite.config.ts',
+        'app/layout.tsx', 'pages/_app.tsx', 'src/router/',
+    ]
+
+    def parse(self, root) -> WorkflowGraph:
+        graph = WorkflowGraph()
+        root = Path(root)
+        # Phase 1: pages, routes, and component import edges (STORY-slim-045)
+        page_files = []
+        page_files.extend(_parse_app_router_pages(root, graph))
+        page_files.extend(_parse_pages_router(root, graph))
+        page_files.extend(_parse_vue_routes(root, graph))
+        _parse_component_imports(page_files, graph)
+        # Phase 2: hooks and stores (STORY-slim-046)
+        hook_files = _scan_hooks(root, graph)
+        _scan_stores(root, graph)
+        # Phase 3: hook→store import edges
+        _parse_hook_store_imports(
+            [(None, hid, fp) for hid, fp in hook_files],
+            graph,
+        )
+        return graph
+
+
+# STORY-slim-045 R6: Register FrontendParser
+_TOPOLOGY_PARSERS['frontend'] = FrontendParser()
+
+
+def _parse_commands(commands_dir, graph: WorkflowGraph):
+    """Parse command markdown files and extract command→agent, command→skill edges (R2)."""
+    if not commands_dir.is_dir():
+        return
+    agent_pattern = re.compile(r'\*\*Agent\*\*:\s*(.+)')
+    role_pattern = re.compile(r'\*\*Role\*\*:\s*(.+)')
+    skill_pattern = re.compile(r'pactkit-(\w+)')
+    for md in sorted(commands_dir.glob('*.md')):
+        cmd_name = md.stem  # e.g. 'project-act'
+        content = md.read_text(encoding='utf-8')
+        graph.add_node(WorkflowNode(id=cmd_name, kind='command', label=cmd_name))
+        # Extract agent role
+        for pat in (agent_pattern, role_pattern):
+            m = pat.search(content)
+            if m:
+                agent_label = m.group(1).strip()
+                agent_id = re.sub(r'[^a-zA-Z0-9]', '-', agent_label).strip('-').lower()
+                graph.add_node(WorkflowNode(id=agent_id, kind='agent', label=agent_label))
+                graph.add_edge(WorkflowEdge(source=cmd_name, target=agent_id, relation='invokes'))
+                break
+        # Extract skill references
+        seen_skills = set()
+        for m in skill_pattern.finditer(content):
+            skill_name = f'pactkit-{m.group(1)}'
+            if skill_name not in seen_skills:
+                seen_skills.add(skill_name)
+                graph.add_node(WorkflowNode(id=skill_name, kind='skill', label=skill_name))
+                graph.add_edge(WorkflowEdge(source=cmd_name, target=skill_name, relation='depends_on'))
+
+
+def _parse_routing_table(rules_dir, graph: WorkflowGraph):
+    """Parse rules/04-routing-table.md to extract command→agent→playbook mappings (R3)."""
+    rt_path = rules_dir / '04-routing-table.md' if rules_dir.is_dir() else None
+    if not rt_path or not rt_path.exists():
+        return
+    content = rt_path.read_text(encoding='utf-8')
+    # Pattern: ### Name (`/project-xxx`) \n - **Role**: Agent Role \n - **Playbook**: `path`
+    block_pattern = re.compile(
+        r'###\s+\w+[^(]*\(`/([^)]+)`\)\s*\n'
+        r'(?:.*?\n)*?'
+        r'-\s*\*\*Role\*\*:\s*(.+)',
+        re.MULTILINE
+    )
+    for m in block_pattern.finditer(content):
+        cmd_name = m.group(1).strip()
+        agent_label = m.group(2).strip()
+        agent_id = re.sub(r'[^a-zA-Z0-9]', '-', agent_label).strip('-').lower()
+        graph.add_node(WorkflowNode(id=cmd_name, kind='command', label=cmd_name))
+        graph.add_node(WorkflowNode(id=agent_id, kind='agent', label=agent_label))
+        graph.add_edge(WorkflowEdge(source=cmd_name, target=agent_id, relation='invokes'))
+
+
+def _scan_skill_files(skills_dir, graph: WorkflowGraph):
+    """Discover skill directories and their script files (R4)."""
+    if not skills_dir.is_dir():
+        return
+    for skill_dir in sorted(skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        skill_name = skill_dir.name
+        graph.add_node(WorkflowNode(id=skill_name, kind='skill', label=skill_name))
+        scripts_dir = skill_dir / 'scripts'
+        if scripts_dir.is_dir():
+            for script in sorted(scripts_dir.iterdir()):
+                if script.is_file():
+                    file_id = f'{skill_name}/{script.name}'
+                    graph.add_node(WorkflowNode(id=file_id, kind='file', label=script.name))
+                    graph.add_edge(WorkflowEdge(source=skill_name, target=file_id, relation='contains'))
+
+
+def _parse_pdca_sequence(commands_dir, graph: WorkflowGraph):
+    """Parse project-sprint.md to extract PDCA command→command sequence edges (STORY-slim-039 R1).
+
+    Looks for 'commands/project-*.md' references in execution order and creates
+    'sequence' edges between consecutive commands that exist in the graph.
+    """
+    commands_dir = Path(commands_dir)
+    if not commands_dir.is_dir():
+        return
+    sprint_path = commands_dir / 'project-sprint.md'
+    if not sprint_path.exists():
+        return
+    content = sprint_path.read_text(encoding='utf-8')
+    # Extract ordered command references: commands/project-xxx.md
+    cmd_ref_pattern = re.compile(r'commands/(project-\w+)\.md')
+    ordered_cmds = []
+    seen = set()
+    for m in cmd_ref_pattern.finditer(content):
+        cmd_name = m.group(1)
+        if cmd_name != 'project-sprint' and cmd_name not in seen:
+            seen.add(cmd_name)
+            ordered_cmds.append(cmd_name)
+    # Create sequence edges between consecutive commands that exist in the graph
+    for i in range(len(ordered_cmds) - 1):
+        src, dst = ordered_cmds[i], ordered_cmds[i + 1]
+        if src in graph.nodes and dst in graph.nodes:
+            graph.add_edge(WorkflowEdge(source=src, target=dst, relation='sequence'))
+
+
+def regression_workflow_impact(target='.', changed_files=None):
+    """Workflow impact for regression gate — informational only (STORY-slim-038 R1-R4).
+
+    Returns a list of impact description strings. Empty list if no matches or on failure.
+    """
+    if not changed_files:
+        return []
+    try:
+        root = Path(target).resolve()
+        graph = build_workflow_graph(root=root)
+        if not graph.nodes:
+            return []
+
+        # Match changed files against graph nodes (file, skill, service nodes)
+        file_nodes = {n.id: n for n in graph.nodes.values() if n.kind == 'file'}
+        matched_entries = set()
+        for cf in changed_files:
+            cf_basename = cf.rsplit('/', 1)[-1] if '/' in cf else cf
+            for fid, fnode in file_nodes.items():
+                if cf_basename == fnode.label or cf_basename in fid:
+                    matched_entries.add(fid)
+            # Also check skill names
+            for nid, node in graph.nodes.items():
+                if node.kind == 'skill' and node.label in cf:
+                    matched_entries.add(nid)
+            # STORY-slim-043 R3: Match service nodes by name in file path
+            for nid, node in graph.nodes.items():
+                if node.kind == 'service' and node.id in cf:
+                    matched_entries.add(nid)
+            # STORY-slim-047 R4: Match hook/store nodes by name in file path
+            for nid, node in graph.nodes.items():
+                if node.kind in ('hook', 'store') and node.id in cf:
+                    matched_entries.add(nid)
+
+        if not matched_entries:
+            return []
+
+        lines = []
+        # Determine which kinds to report as "affected"
+        # (commands for PDCA, services for microservice, pages for frontend)
+        report_kinds = {'command', 'service', 'page'}
+        for entry_id in sorted(matched_entries):
+            reached = graph.reverse_reach(entry_id)
+            affected = sorted(
+                n.label for nid, n in graph.nodes.items()
+                if nid in reached and n.kind in report_kinds and nid != entry_id
+            )
+            if affected:
+                entry_label = graph.nodes.get(entry_id, WorkflowNode(id=entry_id, kind='file', label=entry_id)).label
+                lines.append(f'Workflow Impact: {entry_label} changed → affects: {", ".join(affected)}')
+        return lines
+    except Exception:
+        return []
+
+
+def workflow_impact(target='.', entry=None, entries=None):
+    """Find workflow nodes affected by a changed skill/file (STORY-slim-037).
+
+    Returns a formatted string showing affected commands/agents/skills/files.
+    """
+    root = Path(target).resolve()
+    graph = build_workflow_graph(root=root)
+
+    # Collect all entry points
+    entry_ids = []
+    if entries:
+        entry_ids.extend(entries)
+    elif entry:
+        entry_ids.append(entry)
+    if not entry_ids:
+        return 'Error: no entry point specified'
+
+    # Validate entries
+    all_node_ids = set(graph.nodes.keys())
+    for eid in entry_ids:
+        if eid not in all_node_ids:
+            available = ', '.join(sorted(all_node_ids)[:20])
+            return f'Error: "{eid}" not found in workflow graph. Available nodes: {available}'
+
+    # Union of reverse reach for all entries
+    all_reached = set()
+    for eid in entry_ids:
+        all_reached |= graph.reverse_reach(eid)
+
+    # Group by kind
+    grouped: dict[str, list[str]] = {}
+    for nid in sorted(all_reached):
+        node = graph.nodes.get(nid)
+        if node:
+            grouped.setdefault(node.kind, []).append(node.label)
+
+    # Format output — STORY-slim-041 R6: dynamic kind_labels
+    lines = [f'Workflow Impact for "{", ".join(entry_ids)}":']
+    _known_order = ['command', 'agent', 'skill', 'file']
+    _known_labels = {'command': 'Commands', 'agent': 'Agents', 'skill': 'Skills', 'file': 'Files'}
+    all_kinds = sorted(grouped.keys())
+    kind_order = [k for k in _known_order if k in all_kinds] + [k for k in all_kinds if k not in _known_order]
+    kind_labels = {**_known_labels, **{k: k.title() + 's' for k in all_kinds if k not in _known_labels}}
+    for kind in kind_order:
+        items = grouped.get(kind, [])
+        if items:
+            lines.append(f'  {kind_labels[kind]}: {", ".join(items)}')
+    return nl().join(lines)
+
+
+def build_workflow_graph(root=None, commands_dir=None, rules_dir=None, skills_dir=None):
+    """Build a complete WorkflowGraph via topology detection + parser registry (STORY-slim-041 R3).
+
+    Accepts explicit dirs for testing (bypasses auto-detect, uses PdcaParser directly).
+    """
+    # R4: Explicit dirs bypass auto-detection — delegate directly to PdcaParser
+    if commands_dir is not None or rules_dir is not None or skills_dir is not None:
+        pdca = PdcaParser()
+        return pdca.parse(root or '.', commands_dir=commands_dir, rules_dir=rules_dir, skills_dir=skills_dir)
+
+    if root is None:
+        return WorkflowGraph()
+
+    root = Path(root).resolve()
+    # Auto-detect topologies and merge results (STORY-slim-040 R3, R6)
+    detected = detect_topology(root)
+    merged = WorkflowGraph()
+    for topo_name in detected:
+        parser = _TOPOLOGY_PARSERS.get(topo_name)
+        if parser:
+            sub = parser.parse(root)
+            for node in sub.nodes.values():
+                merged.add_node(node)
+            for edge in sub.edges:
+                merged.add_edge(edge)
+    return merged
+
+
+# --- Unified Layered Graph (STORY-slim-048) ---
+
+def _load_code_graph(root) -> tuple:
+    """Build a code-level WorkflowGraph from source files (STORY-slim-048 R1).
+
+    Uses the existing LanguageAnalyzer pipeline to extract function-level nodes.
+    Returns (WorkflowGraph with 'function' kind nodes, func_registry dict).
+    func_registry: {func_name: file_path_string}
+    """
+    root = Path(root)
+    graph = WorkflowGraph()
+    func_registry: dict[str, str] = {}
+
+    stack = _detect_stack(root)
+    analyzer = _select_analyzer(stack)
+    scan_excludes = _load_scan_excludes(root)
+    file_ext = _LANG_FILE_EXT.get(stack, '.py')
+
+    try:
+        all_files, _, _ = _scan_files(root, scan_excludes=scan_excludes, file_ext=file_ext)
+    except Exception:
+        return graph, func_registry
+
+    call_edges_all: dict[str, list] = {}
+    for f in all_files:
+        fr, ce = analyzer.extract_functions_and_calls(f)
+        for fname, fpath in fr.items():
+            func_registry[fname] = str(fpath)
+        call_edges_all.update(ce)
+
+    all_funcs = set(func_registry.keys())
+    for func_name in all_funcs:
+        graph.add_node(WorkflowNode(id=func_name, kind='function', label=func_name))
+    for caller, callees in call_edges_all.items():
+        if caller not in all_funcs:
+            continue
+        for callee in callees:
+            resolved = _resolve_callee(callee, all_funcs)
+            if resolved:
+                graph.add_edge(WorkflowEdge(source=caller, target=resolved, relation='calls'))
+
+    return graph, func_registry
+
+
+def _build_bridge_edges(func_registry: dict, topology_graph: 'WorkflowGraph', unified_graph: 'WorkflowGraph') -> None:
+    """Create cross-dimension bridge edges linking code-level to topology-level nodes (STORY-slim-048 R2).
+
+    - function → skill: function's file path contains the skill directory name
+    - function → service: function's file path contains the service node ID
+    """
+    skill_nodes = {nid for nid, n in topology_graph.nodes.items() if n.kind == 'skill'}
+    service_nodes = {nid for nid, n in topology_graph.nodes.items() if n.kind == 'service'}
+
+    for func_name, file_path_str in func_registry.items():
+        for skill_id in skill_nodes:
+            if skill_id in file_path_str:
+                unified_graph.add_edge(WorkflowEdge(source=func_name, target=skill_id, relation='implements'))
+        for svc_id in service_nodes:
+            if svc_id in file_path_str:
+                unified_graph.add_edge(WorkflowEdge(source=func_name, target=svc_id, relation='belongs_to'))
+
+
+def build_unified_graph(root) -> 'WorkflowGraph':
+    """Build a unified layered graph merging all topology dimensions with code-level graph (STORY-slim-048 R1).
+
+    Returns WorkflowGraph with layered=True.
+    Enforces MAX_WORKFLOW_NODES — truncates with warning if exceeded.
+    """
+    import warnings as _warnings
+    root = Path(root).resolve()
+    unified = WorkflowGraph()
+    unified.layered = True
+
+    # Topology graph (PDCA + Service + Frontend)
+    topology_graph = build_workflow_graph(root=root)
+    for node in topology_graph.nodes.values():
+        unified.add_node(node)
+    for edge in topology_graph.edges:
+        unified.add_edge(edge)
+
+    # Code graph (function/calls)
+    code_graph, func_registry = _load_code_graph(root)
+    for node in code_graph.nodes.values():
+        unified.add_node(node)
+    for edge in code_graph.edges:
+        unified.add_edge(edge)
+
+    # Bridge edges across dimensions
+    _build_bridge_edges(func_registry, topology_graph, unified)
+
+    # Enforce MAX_WORKFLOW_NODES
+    if len(unified.nodes) > MAX_WORKFLOW_NODES:
+        _warnings.warn(
+            f'Unified graph has {len(unified.nodes)} nodes, truncating to {MAX_WORKFLOW_NODES}',
+            stacklevel=2,
+        )
+        keep_ids = set(list(unified.nodes.keys())[:MAX_WORKFLOW_NODES])
+        unified.nodes = {k: v for k, v in unified.nodes.items() if k in keep_ids}
+        unified.edges = [e for e in unified.edges if e.source in keep_ids and e.target in keep_ids]
+
+    return unified
+
 
 # --- CLI ---
 if __name__ == '__main__':
@@ -472,16 +1998,17 @@ if __name__ == '__main__':
     sub.add_parser('list_rules')
     p_viz = sub.add_parser('visualize')
     p_viz.add_argument('--focus')
-    p_viz.add_argument('--mode', choices=['file', 'class', 'call'], default='file')
+    p_viz.add_argument('--mode', choices=['file', 'class', 'call', 'workflow'], default='file')
     p_viz.add_argument('--entry')
     p_viz.add_argument('--depth', type=int, default=0, help='Limit graph traversal to N levels (0=unlimited)')
     p_viz.add_argument('--max-nodes', type=int, default=0, help='Truncate graph to N nodes (0=unlimited)')
     p_viz.add_argument('--reverse', action='store_true', default=False, help='Reverse BFS: find callers of entry function (STORY-053)')
+    p_viz.add_argument('--lazy', action='store_true', default=False, help='Skip regeneration if graph is up-to-date')
     p_impact = sub.add_parser('impact', help='Find test files impacted by a changed function (STORY-053)')
     p_impact.add_argument('--entry', required=True, help='Changed function name')
 
     a = parser.parse_args()
     if a.cmd == 'init_arch': print(init_architecture())
-    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse))
+    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse, lazy=a.lazy))
     elif a.cmd == 'impact': print(impact('.', a.entry))
     elif a.cmd == 'list_rules': print(list_rules())
