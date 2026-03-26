@@ -1,4 +1,5 @@
 import abc, re, os, sys, json, datetime, argparse, subprocess, shutil, ast
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,9 +20,13 @@ def git_start(story_id):
     branch_type = _BRANCH_PREFIX_MAP.get(prefix, "feature")
     b = f"{branch_type}/{clean_id}"
     try:
-        subprocess.run(["git", "checkout", "-b", b], check=True)
-    except:
-        pass
+        subprocess.run(["git", "checkout", "-b", b], check=True,
+                        capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        reason = (e.stderr or e.stdout or str(e)).strip()
+        return f"❌ Branch creation failed: {reason}"
+    except FileNotFoundError:
+        return "❌ Branch creation failed: git not found"
     return f"✅ Branch: {b}"
 
 
@@ -29,6 +34,8 @@ def git_start(story_id):
 def create_test_file(path):
     p = Path.cwd() / path
     t = Path.cwd() / "tests/unit" / f"test_{p.name}"
+    if t.exists():
+        return f"❌ Test file already exists: {t}"
     if not t.parent.exists():
         t.parent.mkdir(parents=True, exist_ok=True)
     c = ["import pytest", f"# Test {p.name}", "def test_basic(): assert True"]
@@ -40,6 +47,8 @@ def create_e2e(story, name):
     story = _inject_developer_prefix(story)
     safe = re.sub(r"[^a-zA-Z0-9]", "_", name.lower())
     p = Path.cwd() / f"tests/e2e/test_{story}_{safe}.py"
+    if p.exists():
+        return f"❌ E2E test file already exists: {p}"
     if not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
     c = ["import pytest", f"# E2E {story}", "def test_e2e(): assert True"]
@@ -94,7 +103,13 @@ def _inject_developer_prefix(item_id):
     # Check if developer prefix is already present
     if rest.startswith(f"{dev}-"):
         return item_id
-    return f"{item_type}-{dev}-{rest}"
+    # R17: Only inject prefix if rest is pure numeric (e.g., "042")
+    # or matches a known developer-NNN pattern. Reject ambiguous inputs
+    # like "slim2-001" where a different prefix is embedded.
+    if re.match(r"^\d+$", rest):
+        return f"{item_type}-{dev}-{rest}"
+    # rest contains non-numeric chars (e.g., "slim2-001") — pass through unchanged
+    return item_id
 
 
 # --- SPEC ---
@@ -154,9 +169,14 @@ _SPEC_TEMPLATE = """\
 def create_spec(i, t):
     i = _inject_developer_prefix(i)
     p = Path.cwd() / f"docs/specs/{i}.md"
+    if p.exists():
+        return f"❌ Spec already exists: {p}"
     if not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
-    c = _SPEC_TEMPLATE.format(id=i, title=t)
+    # R7 (STORY-slim-052): Use sequential str.replace() instead of .format()
+    # to avoid KeyError/ValueError when title contains { or } characters.
+    # Follows Architecture Principle 7 (template rendering safety).
+    c = _SPEC_TEMPLATE.replace("{id}", i).replace("{title}", t)
     p.write_text(c, encoding="utf-8")
     return "✅ Spec Created"
 
@@ -256,6 +276,9 @@ def create_board():
 # --- PRD ---
 def create_prd(product_name):
     p = Path.cwd() / "docs" / "product" / "prd.md"
+    # R9 (STORY-slim-052): Guard against overwriting existing PRD
+    if p.exists():
+        return f"⚠️ PRD already exists: {p}"
     if not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
     c = nl().join(

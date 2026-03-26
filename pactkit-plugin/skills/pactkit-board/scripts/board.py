@@ -1,4 +1,5 @@
 import abc, re, os, sys, json, datetime, argparse, subprocess, shutil, ast
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,11 @@ def add_story(sid, title, tasks):
     if not p.exists():
         return "❌ No Board"
     content = p.read_text(encoding="utf-8")
+    # R6: Duplicate guard — check if story already exists on board
+    existing_blocks = _parse_story_blocks(content)
+    for block_sid, *_ in existing_blocks:
+        if block_sid == sid:
+            return f"❌ Story {sid} already on board"
     t_md = nl().join([f"- [ ] {t.strip()}" for t in tasks.split("|") if t.strip()])
     entry = f"{nl()}### [{sid}] {title}{nl()}> Spec: docs/specs/{sid}.md{nl()}{nl()}{t_md}{nl()}"
     # Insert before In Progress section
@@ -43,7 +49,10 @@ def add_story(sid, title, tasks):
 
 
 def _parse_story_blocks(content):
-    """Extract all ### [ID] or ### ID: blocks with their full text."""
+    """Extract all ### [ID] or ### ID: blocks with their full text and positions.
+
+    Returns list of (sid, block_text, start_pos, end_pos) tuples.
+    """
     blocks = []
     story_pat = _TITLE_RE
     section_pat = r"^## "
@@ -60,7 +69,12 @@ def _parse_story_blocks(content):
                 next_section = sp
                 break
         end = min(next_story, next_section)
-        blocks.append((m.group(1), content[start:end].rstrip()))
+        # R4 (STORY-slim-052): Trim trailing whitespace and adjust end to match,
+        # so that len(block_text) == end - start for all callers.
+        raw = content[start:end]
+        trimmed = raw.rstrip()
+        adjusted_end = start + len(trimmed)
+        blocks.append((m.group(1), trimmed, start, adjusted_end))
     return blocks
 
 
@@ -87,23 +101,27 @@ def fix_board():
     dp = content.find(_DONE)
     if bp == -1 or ip == -1 or dp == -1:
         return "❌ Board missing section headers"
-    # Extract all story blocks
+    # Extract all story blocks (with positions)
     blocks = _parse_story_blocks(content)
     if not blocks:
         return "✅ No misplaced stories found."
-    # Remove all story blocks from content
+    # Remove all story blocks from content using position-based removal (R5)
     clean = content
-    for sid, block_text in reversed(blocks):
-        idx = clean.find(block_text)
-        if idx != -1:
-            clean = clean[:idx] + clean[idx + len(block_text) :]
+    offset = 0
+    for _, block_text, start, end in blocks:
+        span = end - start
+        adj_start = start - offset
+        clean = clean[:adj_start] + clean[adj_start + span:]
+        offset += span
+    # R2 (STORY-slim-052): Clean up trailing whitespace on otherwise-empty lines
+    clean = nl().join(line.rstrip() for line in clean.split(nl()))
     # Clean up excessive blank lines
     clean = re.sub(r"\n{3,}", nl() + nl(), clean)
     # Classify stories into buckets
     backlog_items = []
     in_progress_items = []
     done_items = []
-    for sid, block_text in blocks:
+    for _, block_text, _, _ in blocks:
         cat = _classify_story(block_text)
         if cat == "backlog":
             backlog_items.append(block_text)
@@ -138,6 +156,19 @@ def fix_board():
     return f"✅ Board fixed: {moved} stories relocated."
 
 
+def _write_board(p, content):
+    """Atomic write to board file."""
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def _mark_done(content, story_match, story_block, old_task):
+    """Replace one unchecked task with checked, return new content."""
+    new_block = story_block.replace(f"- [ ] {old_task}", f"- [x] {old_task}", 1)
+    return content[: story_match.start()] + new_block + content[story_match.end() :]
+
+
 def update_task(sid, tasks_list):
     task_name = " ".join(tasks_list)
     p = Path.cwd() / "docs/product/sprint_board.md"
@@ -150,20 +181,45 @@ def update_task(sid, tasks_list):
     if not story_match:
         return f"❌ Story {sid} not found"
     story_block = story_match.group(1)
-    # Check if task exists as unchecked
+
+    def _update_and_fix(content, matched_task):
+        content = _mark_done(content, story_match, story_block, matched_task)
+        _write_board(p, content)
+        fix_board()  # Explicit call for auto-move (R4: not in _write_board)
+        return f"✅ Task {sid} updated: {matched_task}"
+
+    # Strategy 1: Exact match
     task_pat = rf"(- \[ \] {re.escape(task_name)})"
     if re.search(task_pat, story_block):
-        new_block = re.sub(task_pat, f"- [x] {task_name}", story_block, count=1)
-        new_content = content[: story_match.start()] + new_block + content[story_match.end() :]
-        tmp = p.with_suffix(".tmp")
-        tmp.write_text(new_content, encoding="utf-8")
-        os.replace(tmp, p)
-        fix_board()
-        return f"✅ Task {sid} updated: {task_name}"
-    # Check if already done
+        return _update_and_fix(content, task_name)
+
+    # Check if already done (exact)
     if re.search(rf"- \[x\] {re.escape(task_name)}", story_block):
         return f"✅ Already done: {task_name}"
-    return f"❌ Task not found in {sid}: {task_name}"
+
+    # Strategy 2: Fuzzy fallback — collect all unchecked tasks
+    unchecked = re.findall(r"- \[ \] (.+)", story_block)
+    if not unchecked:
+        return f"✅ All tasks in {sid} already done"
+
+    # 2a: Only one unchecked task — mark it done (most common case)
+    if len(unchecked) == 1:
+        return _update_and_fix(content, unchecked[0])
+
+    # 2b: Substring match
+    matches = [t for t in unchecked
+               if task_name.lower() in t.lower() or t.lower() in task_name.lower()]
+    if len(matches) == 1:
+        return _update_and_fix(content, matches[0])
+
+    # 2c: Numeric index (1-based)
+    if task_name.isdigit():
+        idx = int(task_name) - 1
+        if 0 <= idx < len(unchecked):
+            return _update_and_fix(content, unchecked[idx])
+
+    remaining = ", ".join(unchecked)
+    return f"❌ Task not found in {sid}: {task_name}. Unchecked: [{remaining}]"
 
 
 def update_version(version):
@@ -177,8 +233,12 @@ def update_version(version):
     if yaml_path is None:
         return "⚠️ No pactkit.yaml found, skipping version update"
     content = yaml_path.read_text(encoding="utf-8")
-    content = re.sub(r"version:\s*\S+", f"version: {version}", content)
-    yaml_path.write_text(content, encoding="utf-8")
+    # R8: Only replace the first/top-level version: key, not nested ones
+    content = re.sub(r"version:\s*\S+", f"version: {version}", content, count=1)
+    # R5 (STORY-slim-052): Atomic write via tmp+rename
+    tmp = yaml_path.with_suffix(".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, yaml_path)
     return f"✅ Version updated to {version}"
 
 
@@ -206,19 +266,20 @@ def move_story(sid, target):
         return "❌ No Board"
     content = p.read_text(encoding="utf-8")
     blocks = _parse_story_blocks(content)
-    # Find the target story
+    # Find the target story (with position)
     story_block = None
-    for block_sid, block_text in blocks:
+    block_start = None
+    block_end = None
+    for block_sid, block_text, start, end in blocks:
         if block_sid == sid:
             story_block = block_text
+            block_start = start
+            block_end = end
             break
     if story_block is None:
         return f"❌ Story {sid} not found on board"
-    # Remove the story block from its current position
-    idx = content.find(story_block)
-    if idx == -1:
-        return f"❌ Story {sid} block not found in content"
-    content = content[:idx] + content[idx + len(story_block):]
+    # Remove the story block using its known position (R5)
+    content = content[:block_start] + content[block_end:]
     content = re.sub(r"\n{3,}", nl() + nl(), content)
     # Find target section and the next section after it
     target_header = valid_targets[target]
@@ -281,7 +342,8 @@ def archive_stories():
         return "❌ No Board"
     content = board_path.read_text(encoding="utf-8")
     # BUG-027: Support both ### and #### for backward compatibility
-    parts = re.split(r"(?=^#{3,4} \[?(?:STORY|HOTFIX|BUG)-)", content, flags=re.MULTILINE)
+    # R7: Use ITEM_ID_RE instead of hardcoded prefix list
+    parts = re.split(rf"(?=^#{{3,4}} \[?(?:{ITEM_ID_RE})\]?)", content, flags=re.MULTILINE)
     active_parts = [parts[0]]
     archived_parts = []
     for part in parts[1:]:

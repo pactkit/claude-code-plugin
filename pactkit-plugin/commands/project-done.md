@@ -23,8 +23,12 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 ## 🎬 Phase 2.5: Regression Gate (MANDATORY)
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.
 
-### Step 1: Impact Analysis
+### Step 0: Source Change Pre-Check
 - Run `git diff --name-only HEAD~1` (or vs. branch base) to list all changed files.
+- Filter for source and test files only (exclude docs, configs, graphs).
+- If **no source/test files changed** since the last commit (e.g., only docs, board, graphs, or config changed): log `"Regression: SKIP — no source/test changes since Act"` and proceed directly to Step 2.7 (Smart Lint Gate). This avoids re-running 3000+ tests when Act already verified the code.
+
+### Step 1: Impact Analysis
 - Check if `docs/architecture/graphs/code_graph.mmd` exists.
 
 ### Step 1.3: Classification Shortcut
