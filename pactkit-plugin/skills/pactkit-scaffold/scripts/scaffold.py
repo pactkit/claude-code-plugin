@@ -60,7 +60,6 @@ def create_e2e(story, name):
 _PACTKIT_YAML_CANDIDATES = [
     ".opencode/pactkit.yaml",
     ".claude/pactkit.yaml",
-    ".codex/pactkit.yaml",
 ]
 
 
