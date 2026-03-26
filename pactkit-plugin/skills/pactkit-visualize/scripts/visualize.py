@@ -865,8 +865,23 @@ def impact(target='.', entry=None):
 
 
 # --- MAIN VISUALIZE (v1.3.0 Multi-Mode) ---
-def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False, lazy=False):
+def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False, lazy=False, split=False):
     root = Path(target).resolve()
+
+    # --- Unified mode (STORY-slim-049) ---
+    if mode == 'unified':
+        graph = build_unified_graph(root)
+        graphs_dir = root / 'docs' / 'architecture' / 'graphs'
+        graphs_dir.mkdir(parents=True, exist_ok=True)
+        dest = graphs_dir / 'unified_graph.mmd'
+        dest.write_text(graph.to_mermaid(), encoding='utf-8')
+        result = f'✅ Graph: {dest}'
+        # HOTFIX-slim-050: auto-split only for large graphs; --split forces it
+        if split or len(graph.nodes) > MAX_WORKFLOW_NODES:
+            focus_dir = graphs_dir / 'focus'
+            written = export_focus_graphs(graph, focus_dir)
+            result += f' + {len(written)} focus graphs in {focus_dir}'
+        return result
 
     # --- Workflow mode (STORY-slim-036) ---
     if mode == 'workflow':
@@ -996,7 +1011,7 @@ class WorkflowGraph:
         """Sanitize a string for use as a Mermaid node ID."""
         return re.sub(r'[^a-zA-Z0-9_]', '_', raw)
 
-    def to_mermaid(self) -> str:
+    def to_mermaid(self, max_render_nodes: int = 0) -> str:
         lines = ['graph TD']
         if self.layered:
             # STORY-slim-048 R3: Group by dimension for unified/layered graphs
@@ -1034,12 +1049,53 @@ class WorkflowGraph:
                     sid = self._sanitize_id(n.id)
                     lines.append(f'        {sid}["{n.label}"]')
                 lines.append('    end')
+        # STORY-slim-049 R3: max_render_nodes truncation for human-readable output
+        if max_render_nodes > 0:
+            node_lines = [ln for ln in lines[1:] if '[' in ln and 'NOTE' not in ln]
+            if len(node_lines) > max_render_nodes:
+                truncated_count = len(node_lines) - max_render_nodes
+                keep_ids = set()
+                for ln in node_lines[:max_render_nodes]:
+                    nid = ln.strip().split('[')[0].strip()
+                    keep_ids.add(nid)
+                filtered = ['graph TD']
+                for ln in lines[1:]:
+                    if '[' in ln:
+                        line_id = ln.strip().split('[')[0].strip()
+                        if line_id in keep_ids:
+                            filtered.append(ln)
+                    elif 'subgraph' in ln or 'end' == ln.strip():
+                        filtered.append(ln)
+                filtered.append(f'    NOTE["... and {truncated_count} more nodes"]')
+                lines = filtered
+
         for e in self.edges:
             src = self._sanitize_id(e.source)
             dst = self._sanitize_id(e.target)
             arrow = '-.->' if e.relation == 'sequence' else '-->'
+            if max_render_nodes > 0 and len(lines) > 1:
+                rendered_ids = {ln.strip().split('[')[0].strip() for ln in lines if '[' in ln and 'NOTE' not in ln}
+                if src not in rendered_ids or dst not in rendered_ids:
+                    continue
             lines.append(f'    {src} {arrow}|{e.relation}| {dst}')
         return nl().join(lines)
+
+    def forward_reach(self, entry_id: str) -> set[str]:
+        """Forward BFS from entry_id — follow edges forward (source→target)."""
+        forward_map: dict[str, list[str]] = {}
+        for e in self.edges:
+            forward_map.setdefault(e.source, []).append(e.target)
+        visited: set[str] = set()
+        queue = [entry_id]
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            for dst in forward_map.get(current, []):
+                if dst not in visited:
+                    queue.append(dst)
+        return visited
 
     def reverse_reach(self, entry_id: str) -> set[str]:
         """Reverse BFS from entry_id — follow edges backward (target→source)."""
@@ -1953,9 +2009,8 @@ def build_unified_graph(root) -> 'WorkflowGraph':
     """Build a unified layered graph merging all topology dimensions with code-level graph (STORY-slim-048 R1).
 
     Returns WorkflowGraph with layered=True.
-    Enforces MAX_WORKFLOW_NODES — truncates with warning if exceeded.
+    STORY-slim-049 R1: No truncation — full graph for accurate reverse_reach() impact analysis.
     """
-    import warnings as _warnings
     root = Path(root).resolve()
     unified = WorkflowGraph()
     unified.layered = True
@@ -1977,17 +2032,47 @@ def build_unified_graph(root) -> 'WorkflowGraph':
     # Bridge edges across dimensions
     _build_bridge_edges(func_registry, topology_graph, unified)
 
-    # Enforce MAX_WORKFLOW_NODES
-    if len(unified.nodes) > MAX_WORKFLOW_NODES:
-        _warnings.warn(
-            f'Unified graph has {len(unified.nodes)} nodes, truncating to {MAX_WORKFLOW_NODES}',
-            stacklevel=2,
-        )
-        keep_ids = set(list(unified.nodes.keys())[:MAX_WORKFLOW_NODES])
-        unified.nodes = {k: v for k, v in unified.nodes.items() if k in keep_ids}
-        unified.edges = [e for e in unified.edges if e.source in keep_ids and e.target in keep_ids]
+    # STORY-slim-049 R1: No truncation — full graph for accurate reverse_reach() impact analysis.
+    # MAX_WORKFLOW_NODES constant retained for backward compatibility but not enforced here.
 
     return unified
+
+
+# --- STORY-slim-049: Focused Sub-Graph Export ---
+
+_ENTRY_POINT_KINDS = {'command', 'service', 'page'}
+
+
+def export_focus_graphs(graph: WorkflowGraph, output_dir) -> list:
+    """Export per-entry-point focused sub-graph .mmd files (STORY-slim-049 R2).
+
+    Identifies first-level entry points (command/service/page), extracts
+    reachable sub-graphs via reverse_reach(), writes each as a standalone .mmd.
+    Returns list of Path objects for written files.
+    """
+    output_dir = Path(output_dir)
+    entry_points = [n for n in graph.nodes.values() if n.kind in _ENTRY_POINT_KINDS]
+    if not entry_points:
+        return []
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for entry in sorted(entry_points, key=lambda n: n.id):
+        reached_ids = graph.forward_reach(entry.id)
+        # Build sub-graph
+        sub = WorkflowGraph()
+        for nid in reached_ids:
+            node = graph.nodes.get(nid)
+            if node:
+                sub.add_node(node)
+        for edge in graph.edges:
+            if edge.source in reached_ids and edge.target in reached_ids:
+                sub.add_edge(edge)
+        # Write .mmd
+        sanitized = WorkflowGraph._sanitize_id(entry.id)
+        dest = output_dir / f'focus_{sanitized}.mmd'
+        dest.write_text(sub.to_mermaid(), encoding='utf-8')
+        written.append(dest)
+    return written
 
 
 # --- CLI ---
@@ -1998,17 +2083,18 @@ if __name__ == '__main__':
     sub.add_parser('list_rules')
     p_viz = sub.add_parser('visualize')
     p_viz.add_argument('--focus')
-    p_viz.add_argument('--mode', choices=['file', 'class', 'call', 'workflow'], default='file')
+    p_viz.add_argument('--mode', choices=['file', 'class', 'call', 'workflow', 'unified'], default='file')
     p_viz.add_argument('--entry')
     p_viz.add_argument('--depth', type=int, default=0, help='Limit graph traversal to N levels (0=unlimited)')
     p_viz.add_argument('--max-nodes', type=int, default=0, help='Truncate graph to N nodes (0=unlimited)')
     p_viz.add_argument('--reverse', action='store_true', default=False, help='Reverse BFS: find callers of entry function (STORY-053)')
     p_viz.add_argument('--lazy', action='store_true', default=False, help='Skip regeneration if graph is up-to-date')
+    p_viz.add_argument('--split', action='store_true', default=False, help='Generate per-entry-point focus graphs (unified mode only)')
     p_impact = sub.add_parser('impact', help='Find test files impacted by a changed function (STORY-053)')
     p_impact.add_argument('--entry', required=True, help='Changed function name')
 
     a = parser.parse_args()
     if a.cmd == 'init_arch': print(init_architecture())
-    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse, lazy=a.lazy))
+    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse, lazy=a.lazy, split=a.split))
     elif a.cmd == 'impact': print(impact('.', a.entry))
     elif a.cmd == 'list_rules': print(list_rules())

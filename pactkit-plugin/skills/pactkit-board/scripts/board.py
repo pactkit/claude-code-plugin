@@ -5,7 +5,7 @@ from pathlib import Path
 def nl(): return chr(10)
 
 # Shared pattern for all recognized work item prefixes
-ITEM_ID_RE = r"(?:STORY|HOTFIX|BUG)-\d+"
+ITEM_ID_RE = r"(?:STORY|HOTFIX|BUG)(?:-[a-z]+)?-\d+"
 
 # Flexible story title pattern: matches ### or #### (tolerant) with [ID] or ID: or ID formats
 # Group 1: story ID, Group 2: title text
@@ -195,6 +195,54 @@ def snapshot_graph(version):
     return f"✅ Snapshot {version}: {count} graphs saved"
 
 
+# --- MOVE ---
+def move_story(sid, target):
+    """Move a story to the specified section regardless of checkbox state."""
+    valid_targets = {"backlog": _BACKLOG, "in_progress": _IN_PROGRESS, "done": _DONE}
+    if target not in valid_targets:
+        return f"❌ Invalid target: {target}. Use: backlog, in_progress, done"
+    p = Path.cwd() / "docs/product/sprint_board.md"
+    if not p.exists():
+        return "❌ No Board"
+    content = p.read_text(encoding="utf-8")
+    blocks = _parse_story_blocks(content)
+    # Find the target story
+    story_block = None
+    for block_sid, block_text in blocks:
+        if block_sid == sid:
+            story_block = block_text
+            break
+    if story_block is None:
+        return f"❌ Story {sid} not found on board"
+    # Remove the story block from its current position
+    idx = content.find(story_block)
+    if idx == -1:
+        return f"❌ Story {sid} block not found in content"
+    content = content[:idx] + content[idx + len(story_block):]
+    content = re.sub(r"\n{3,}", nl() + nl(), content)
+    # Find target section and the next section after it
+    target_header = valid_targets[target]
+    section_order = [_BACKLOG, _IN_PROGRESS, _DONE]
+    target_idx = content.find(target_header)
+    if target_idx == -1:
+        return f"❌ Section '{target_header}' not found"
+    # Find the next section header after target
+    next_section_idx = len(content)
+    for sec in section_order:
+        sec_idx = content.find(sec)
+        if sec_idx > target_idx and sec_idx < next_section_idx:
+            next_section_idx = sec_idx
+    # Insert story block just before the next section (or at end)
+    insert_point = next_section_idx
+    entry = nl() + story_block + nl() + nl()
+    content = content[:insert_point].rstrip() + entry + content[insert_point:]
+    content = re.sub(r"\n{3,}", nl() + nl(), content)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, p)
+    return f"✅ Moved {sid} to {target}"
+
+
 # --- LIST ---
 def list_stories():
     p = Path.cwd() / "docs/product/sprint_board.md"
@@ -278,6 +326,9 @@ if __name__ == "__main__":
     p_ver.add_argument("version")
     p_snap = sub.add_parser("snapshot")
     p_snap.add_argument("version")
+    p_move = sub.add_parser("move_story")
+    p_move.add_argument("story_id")
+    p_move.add_argument("target", choices=["backlog", "in_progress", "done"])
     sub.add_parser("archive")
     sub.add_parser("list_stories")
     sub.add_parser("fix_board")
@@ -295,5 +346,7 @@ if __name__ == "__main__":
         print(archive_stories())
     elif a.cmd == "list_stories":
         print(list_stories())
+    elif a.cmd == "move_story":
+        print(move_story(a.story_id, a.target))
     elif a.cmd == "fix_board":
         print(fix_board())
