@@ -9,7 +9,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 ## 🧠 Phase 0: The Thinking Process
 > **Execution Style**: Work through each phase incrementally — output progress as you go. Do NOT try to plan the entire Spec in your head before producing output. Start each phase, show your findings, then move to the next.
-> **Tool Integration Note**: If the request involves adapting PactKit to a new AI coding tool (new `format` value like `codex`, `cursor`, etc.), **always start** by consulting `docs/guides/tool-integration-checklist.md`. Complete Dimension 0 (capability matrix) before writing any code. See also `docs/guides/codex-integration-preresearch.md` for an example pre-research template.
+> **Tool Integration Note**: If the request involves adapting PactKit to a new AI coding tool (new `format` value like `cursor`, `trae`, etc.), **always start** by consulting `docs/guides/tool-integration-checklist.md`. Complete Dimension 0 (capability matrix) before writing any code.
 
 1.  **Analyze Intent**: New feature (Expansion) or Bugfix/Refactor (Modification)?
 2.  **Strategy**:

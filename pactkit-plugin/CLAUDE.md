@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.5.0 Modular)
+# PactKit Global Constitution (v2.6.0 Modular)
 
 # Core Protocol
 
@@ -291,7 +291,7 @@ Write `docs/product/context.md` using this format:
 - When updating a canonical value, search all inline copies with `grep` and update them in the same commit.
 
 ## 2. Open-Closed Principle (OCP)
-- Adding a new tool format (e.g., `codex`, `cursor`) MUST NOT require modifying existing functions.
+- Adding a new tool format (e.g., `cursor`, `trae`) MUST NOT require modifying existing functions.
 - Pattern: add a new `FormatProfile` entry to `FORMAT_PROFILES` in `profiles.py`. All downstream code (`deployer`, `config`, `CLI`) auto-picks it up.
 - Adding a new document type MUST only require adding constants to `schemas.py` and an entry to `SCHEMA_REGISTRY`.
 
@@ -301,7 +301,7 @@ Write `docs/product/context.md` using this format:
 - Functions MUST accept a `profile: FormatProfile` parameter instead of format-specific booleans (`opencode_format=True`) or manual path strings (`skills_prefix="~/.config/opencode/skills"`).
 
 ## 4. Liskov Substitution (LSP) — Deploy Chain Parity
-- All environment-format deploy functions (`_deploy_classic`, `_deploy_opencode`, `_deploy_codex`) MUST support the same user-facing feature set:
+- All deployer classes (ClassicDeployer, OpenCodeDeployer, etc.) MUST support the same user-facing feature set:
   - Selective deployment (read `pactkit.yaml`)
   - Auto-merge on upgrade (`auto_merge_config_file`)
   - Legacy cleanup (`_cleanup_legacy`)
@@ -310,14 +310,14 @@ Write `docs/product/context.md` using this format:
 
 ## 5. Interface Segregation (ISP)
 - Each `FormatProfile` exposes only the fields relevant to that format:
-  - `commands_dir = None` for formats without custom commands (Codex)
+  - `commands_dir = None` for formats without custom commands
   - `excluded_agent_fields` removes fields invalid for that format
-- Consumers MUST check `if profile.has_custom_commands` before deploying commands — not `if format != "codex"`.
+- Consumers MUST check `if profile.has_custom_commands` before deploying commands — not hardcoded format checks.
 
 ## 6. Defense-in-Depth (Security)
 - **Path traversal**: All file writes use `atomic_write()` which creates parent directories safely.
 - **Config isolation**: `_generate_config_if_missing(format=)` writes to the format-specific directory only. Never cross-write.
-- **No secret leakage**: `config.toml` merge (Codex) MUST NOT copy user API keys. `_render_prompt()` variables are all path-based, never credential-based.
+- **No secret leakage**: `_render_prompt()` variables are all path-based, never credential-based.
 - **Standalone script safety**: Skill scripts (board.py, scaffold.py) MUST NOT execute arbitrary imports. Use `try/except ImportError` fallback for pactkit imports.
 
 ## 7. Template Rendering Safety
