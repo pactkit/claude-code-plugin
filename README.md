@@ -1,6 +1,6 @@
 # PactKit — Claude Code Plugin
 
-Spec-driven agentic DevOps toolkit for [Claude Code](https://claude.com/claude-code). This repository contains the **plugin format** distribution of [PactKit](https://github.com/pactkit/pactkit).
+Spec-driven agentic DevOps toolkit for [Claude Code](https://claude.com/claude-code). This repository contains the **plugin format** distribution of [PactKit](https://github.com/pactkit/pactkit-public).
 
 ## What is PactKit?
 
@@ -29,7 +29,7 @@ pip install pactkit
 pactkit init
 ```
 
-See the [main repository](https://github.com/pactkit/pactkit) for full documentation.
+See the [main repository](https://github.com/pactkit/pactkit-public) for full documentation.
 
 ## What's Included
 
@@ -72,7 +72,7 @@ See the [main repository](https://github.com/pactkit/pactkit) for full documenta
 
 ## Links
 
-- [PactKit Main Repo](https://github.com/pactkit/pactkit)
+- [PactKit Main Repo](https://github.com/pactkit/pactkit-public)
 - [PyPI](https://pypi.org/project/pactkit/)
 - [Documentation](https://pactkit.dev)
 
