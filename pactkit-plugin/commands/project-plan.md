@@ -83,7 +83,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 1.  **Scaffold**: Run `{SCAFFOLD_CMD} create_spec "{ID}" "{title}"` to generate `docs/specs/{ID}.md` from SPEC_TEMPLATE. This creates all sections, tables, and Given/When/Then skeleton — format is guaranteed by Code.
 2.  **Read**: Read `docs/specs/{ID}.md` to see the scaffolded template.
 3.  **Edit placeholders** (use Edit tool, NOT Write):
-    - Edit `Release | TBD` → `Release | {version}` (read version from `{PACTKIT_YAML}` or `pyproject.toml`; if unreadable, keep TBD)
+    - Edit `Release | TBD` → `Release | {version}` (from `pyproject.toml`/`package.json`, NOT `{PACTKIT_YAML}`)
     - Edit `(Description of the problem or feature)` → actual Background content from your Trace findings
     - Edit `## Target Call Chain` placeholder → actual call chain from Phase 1
     - Edit `### R1: (Requirement Name) (MUST)` → actual requirements using RFC 2119 keywords (MUST/SHOULD/MAY). Add more R{N} sections as needed.

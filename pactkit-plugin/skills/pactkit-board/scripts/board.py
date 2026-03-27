@@ -179,6 +179,10 @@ def update_task(sid, tasks_list):
     story_pat = rf"(#{{3,4}} \[?{re.escape(sid)}\]?:?.*?)(?=\n#{{3,4}} |\Z)"
     story_match = re.search(story_pat, content, re.DOTALL)
     if not story_match:
+        # Fallback: check if story exists as a bullet in the Done section
+        done_pos = content.find(_DONE)
+        if done_pos != -1 and re.search(rf"\*\*{re.escape(sid)}\*\*", content[done_pos:]):
+            return f"✅ Already done: {sid} (all tasks complete)"
         return f"❌ Story {sid} not found"
     story_block = story_match.group(1)
 

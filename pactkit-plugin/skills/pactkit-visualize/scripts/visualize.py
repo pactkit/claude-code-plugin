@@ -590,7 +590,7 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=
         target_ids = set()
         for f, nid in file_to_node.items():
             rel = str(f.relative_to(root))
-            if rel == focus or rel.endswith('/' + focus):
+            if rel == focus or rel.endswith('/' + focus) or f.stem == focus:
                 target_ids.add(nid)
         if not target_ids:
             return None, f"❌ Focus target '{focus}' not found. (Scanned {len(all_files)} files)"
