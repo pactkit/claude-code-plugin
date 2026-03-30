@@ -28,7 +28,22 @@ Deep code analysis and execution path tracing via static analysis.
 ### 4. Visual Synthesis
 Output a **Mermaid Sequence Diagram** to visualize the flow.
 
-### 5. Archaeologist Report
+### 5. Topology-Aware Trace (Conditional)
+If `detect_topology(root)` returns topologies beyond PDCA/Service:
+
+**Frontend API Topology** (if `api_call` detected):
+- Run `api_convention_summary(root)` to get path prefixes, fetch function names, total call count.
+- Include conventions in output so downstream code uses the correct API path prefix (e.g., `/api/v1/`) and fetch wrapper (e.g., `apiFetch`).
+- Flag any dynamic paths (`[dynamic]` markers) that may need special handling.
+
+**Agent Topology** (if `agent` detected):
+- AgentParser extracts orchestration from: LangGraph `StateGraph` (stdlib ast), YAML agent definitions, MCP server configs.
+- Include agent nodes and `orchestrates` edges in the report.
+- Flag multi-strategy merge results — agents may appear in multiple sources but are deduplicated.
+
+### 6. Archaeologist Report
 - **Patterns**: Design Patterns used.
 - **Debt**: Hardcoded values, complex logic, lack of tests.
 - **Key Files**: Top 3 files critical to this feature.
+- **API Conventions** (if frontend): Path prefixes, fetch functions, call count.
+- **Agent Flow** (if agents): Orchestration graph, delegation chains.

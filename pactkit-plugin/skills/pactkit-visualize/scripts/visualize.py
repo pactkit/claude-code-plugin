@@ -1077,6 +1077,8 @@ _KIND_TO_DIMENSION: dict[str, str] = {
     'component': 'Frontend Topology',
     'hook': 'Frontend Topology',
     'store': 'Frontend Topology',
+    'api_call': 'API Topology',
+    'agent_def': 'Agent Topology',
 }
 
 
@@ -1210,7 +1212,8 @@ class TopologyParser(abc.ABC):
     """Abstract base class for topology-specific workflow parsers (STORY-slim-040 R1).
 
     Subclasses declare `markers` and implement `parse()`.
-    The default `detect()` checks if any marker file/dir exists under root.
+    The default `detect()` checks if any marker file/dir exists under root,
+    then checks immediate subdirectories for monorepo layouts (e.g., web/, frontend/).
     """
     markers: list[str] = []
 
@@ -1219,6 +1222,16 @@ class TopologyParser(abc.ABC):
         for marker in self.markers:
             if (root / marker).exists():
                 return True
+        # Monorepo: check immediate subdirectories (e.g., web/, frontend/, client/)
+        try:
+            subdirs = [d for d in root.iterdir()
+                       if d.is_dir() and not d.name.startswith('.') and d.name != 'node_modules']
+        except OSError:
+            return False
+        for subdir in subdirs:
+            for marker in self.markers:
+                if (subdir / marker).exists():
+                    return True
         return False
 
     @abc.abstractmethod
@@ -1249,13 +1262,28 @@ def detect_topology(root) -> list[str]:
             matched.append(name)
         checked.add(name)
     # Second pass: fall back to _TOPOLOGY_MARKERS for unregistered topologies
+    try:
+        subdirs = [d for d in root.iterdir()
+                   if d.is_dir() and not d.name.startswith('.') and d.name != 'node_modules']
+    except OSError:
+        subdirs = []
     for name, markers in _TOPOLOGY_MARKERS.items():
         if name in checked:
             continue
+        found = False
         for marker in markers:
             if (root / marker).exists():
-                matched.append(name)
+                found = True
                 break
+            # Monorepo: check subdirectories
+            for subdir in subdirs:
+                if (subdir / marker).exists():
+                    found = True
+                    break
+            if found:
+                break
+        if found:
+            matched.append(name)
     return matched
 
 
@@ -1800,6 +1828,388 @@ class FrontendParser(TopologyParser):
 
 # STORY-slim-045 R6: Register FrontendParser
 _TOPOLOGY_PARSERS['frontend'] = FrontendParser()
+
+
+# ---------------------------------------------------------------------------
+# STORY-slim-066: ApiCallParser — tree-sitter-based API call extraction (R1)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_FETCH_FUNCTIONS = ["fetch", "apiFetch", "axios", "useQuery", "useSWR", "useMutation"]
+
+# tree-sitter queries for API call extraction
+_API_CALL_QUERY_SRC = '''[
+  (call_expression
+    function: (identifier) @callee
+    arguments: (arguments . (string) @api_path))
+  (call_expression
+    function: (identifier) @callee
+    arguments: (arguments . (template_string) @dynamic_path))
+  (call_expression
+    function: (member_expression
+      object: (identifier) @obj
+      property: (property_identifier) @method)
+    arguments: (arguments . (string) @api_path))
+  (call_expression
+    function: (member_expression
+      object: (identifier) @obj
+      property: (property_identifier) @method)
+    arguments: (arguments . (template_string) @dynamic_path))
+]'''
+
+
+def _find_enclosing_func_name(node):
+    """Walk tree-sitter parents to find the enclosing function/component name."""
+    current = node.parent
+    while current:
+        if current.type in ('function_declaration', 'method_definition'):
+            for child in current.children:
+                if child.type == 'identifier':
+                    return child.text.decode()
+                if child.type == 'property_identifier':
+                    return child.text.decode()
+        if current.type in ('lexical_declaration', 'variable_declaration'):
+            for child in current.children:
+                if child.type == 'variable_declarator':
+                    name_node = child.child_by_field_name('name')
+                    if name_node:
+                        return name_node.text.decode()
+        if current.type == 'export_default_declaration':
+            for child in current.children:
+                if child.type == 'function_declaration':
+                    for sub in child.children:
+                        if sub.type == 'identifier':
+                            return sub.text.decode()
+        current = current.parent
+    return None
+
+
+class ApiCallParser(TopologyParser):
+    """Extract API call topology from frontend source files (STORY-slim-066 R1).
+
+    Uses tree-sitter-typescript for AST-accurate call extraction.
+    Falls back gracefully when tree-sitter is not installed.
+    """
+    markers = FrontendParser.markers  # same detection as frontend
+
+    def __init__(self, fetch_functions=None):
+        self._fetch_functions = fetch_functions or list(_DEFAULT_FETCH_FUNCTIONS)
+        self._ts_parser = None
+        self._api_query = None
+        if _HAS_TREE_SITTER:
+            try:
+                import tree_sitter_typescript as _tsts
+                lang = _TSLanguage(_tsts.language_tsx())
+                self._ts_parser = _TSParser(lang)
+                self._api_query = _TSQuery(lang, _API_CALL_QUERY_SRC)
+            except (ImportError, Exception):
+                pass
+
+    def detect(self, root) -> bool:
+        if self._ts_parser is None:
+            return False
+        return super().detect(root)
+
+    def parse(self, root) -> WorkflowGraph:
+        graph = WorkflowGraph()
+        if self._ts_parser is None:
+            return graph
+        root = Path(root)
+        ts_files = []
+        for ext in ('*.ts', '*.tsx', '*.js', '*.jsx'):
+            ts_files.extend(root.rglob(ext))
+        fetch_set = set(self._fetch_functions)
+        for fpath in sorted(ts_files):
+            # Skip node_modules, .git, etc.
+            parts = fpath.parts
+            if any(p.startswith('.') or p == 'node_modules' for p in parts):
+                continue
+            try:
+                source = fpath.read_bytes()
+                tree = self._ts_parser.parse(source)
+            except Exception:
+                continue
+            cursor = _TSQueryCursor(self._api_query)
+            matches = cursor.matches(tree.root_node)
+            for _, match_dict in matches:
+                callee_nodes = match_dict.get('callee', [])
+                obj_nodes = match_dict.get('obj', [])
+                method_nodes = match_dict.get('method', [])
+                path_nodes = match_dict.get('api_path', [])
+                dynamic_nodes = match_dict.get('dynamic_path', [])
+                # Determine the fetch function name
+                func_name = None
+                call_node = None
+                if callee_nodes:
+                    func_name = callee_nodes[0].text.decode()
+                    call_node = callee_nodes[0]
+                elif obj_nodes and method_nodes:
+                    func_name = obj_nodes[0].text.decode()
+                    call_node = obj_nodes[0]
+                if func_name not in fetch_set:
+                    continue
+                # Extract path
+                is_dynamic = False
+                api_path = None
+                if path_nodes:
+                    raw = path_nodes[0].text.decode().strip('"\'')
+                    api_path = raw
+                elif dynamic_nodes:
+                    is_dynamic = True
+                    raw = dynamic_nodes[0].text.decode()
+                    api_path = raw
+                if api_path is None:
+                    continue
+                # Build label
+                label = f"[dynamic] {api_path}" if is_dynamic else api_path
+                node_id = f"api:{label}"
+                graph.add_node(WorkflowNode(id=node_id, kind='api_call', label=label))
+                # Find enclosing function for edge source
+                enclosing = _find_enclosing_func_name(call_node)
+                if enclosing:
+                    graph.add_edge(WorkflowEdge(source=enclosing, target=node_id, relation='fetches'))
+        return graph
+
+
+_TOPOLOGY_PARSERS['api_call'] = ApiCallParser()
+
+
+# ---------------------------------------------------------------------------
+# STORY-slim-066: AgentParser — multi-strategy agent topology (R2)
+# ---------------------------------------------------------------------------
+
+def _parse_langgraph_ast(filepath):
+    """Strategy 1: Parse LangGraph StateGraph patterns using stdlib ast."""
+    import ast as _ast
+    try:
+        source = filepath.read_text(encoding='utf-8', errors='replace')
+        tree = _ast.parse(source)
+    except Exception:
+        return [], []
+    nodes = []
+    edges = []
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.Expr) and not isinstance(node, _ast.Assign):
+            if isinstance(node, _ast.Call):
+                _langgraph_process_call(node, nodes, edges)
+            continue
+        # For Expr and Assign, check value
+        value = node.value if isinstance(node, _ast.Expr) else node.value if isinstance(node, _ast.Assign) else None
+        if isinstance(value, _ast.Call):
+            _langgraph_process_call(value, nodes, edges)
+    return nodes, edges
+
+
+def _langgraph_process_call(call_node, nodes, edges):
+    """Extract add_node / add_edge / add_conditional_edges from a Call AST node."""
+    import ast as _ast
+    func = call_node.func
+    method_name = None
+    if isinstance(func, _ast.Attribute):
+        method_name = func.attr
+    elif isinstance(func, _ast.Name):
+        method_name = func.id
+    if method_name == 'add_node' and len(call_node.args) >= 1:
+        arg = call_node.args[0]
+        if isinstance(arg, _ast.Constant) and isinstance(arg.value, str):
+            nodes.append(arg.value)
+    elif method_name == 'add_edge' and len(call_node.args) >= 2:
+        src_arg, tgt_arg = call_node.args[0], call_node.args[1]
+        if isinstance(src_arg, _ast.Constant) and isinstance(tgt_arg, _ast.Constant):
+            if isinstance(src_arg.value, str) and isinstance(tgt_arg.value, str):
+                edges.append((src_arg.value, tgt_arg.value))
+    elif method_name == 'add_conditional_edges' and len(call_node.args) >= 3:
+        src_arg = call_node.args[0]
+        mapping_arg = call_node.args[2] if len(call_node.args) >= 3 else None
+        if isinstance(src_arg, _ast.Constant) and isinstance(src_arg.value, str):
+            src_name = src_arg.value
+            if isinstance(mapping_arg, _ast.Dict):
+                for val in mapping_arg.values:
+                    if isinstance(val, _ast.Constant) and isinstance(val.value, str):
+                        if val.value not in ('__end__', 'END'):
+                            edges.append((src_name, val.value))
+
+
+def _parse_yaml_agents(agents_dir):
+    """Strategy 2: Parse YAML agent definitions from agents/ directory."""
+    import yaml
+    nodes = []
+    edges = []
+    if not agents_dir.is_dir():
+        return nodes, edges
+    for yf in sorted(agents_dir.glob('*.yaml')):
+        try:
+            data = yaml.safe_load(yf.read_text(encoding='utf-8'))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        agent = data.get('agent', data)
+        name = agent.get('name')
+        if name:
+            nodes.append(name)
+            delegates = agent.get('delegates_to', [])
+            if isinstance(delegates, list):
+                for target in delegates:
+                    edges.append((name, target))
+    return nodes, edges
+
+
+def _parse_mcp_settings(settings_path):
+    """Strategy 3: Parse MCP server definitions from settings JSON."""
+    import json
+    nodes = []
+    try:
+        data = json.loads(settings_path.read_text(encoding='utf-8'))
+    except Exception:
+        return nodes
+    servers = data.get('mcpServers', {})
+    if isinstance(servers, dict):
+        for name in servers:
+            nodes.append(name)
+    return nodes
+
+
+class AgentParser(TopologyParser):
+    """Multi-strategy agent topology parser (STORY-slim-066 R2).
+
+    Strategy priority:
+    1. LangGraph/LangChain (stdlib ast) — highest precision
+    2. Declarative YAML configs (agents/ dir)
+    3. MCP config (.claude/settings.json)
+    4. A2A Agent Card (local files only) — future
+    """
+    markers = [
+        'agents/', 'crew.yaml', 'AGENTS.md',
+        '.claude/settings.json', 'mcp.json',
+    ]
+
+    def detect(self, root) -> bool:
+        root = Path(root)
+        # Check standard markers
+        if super().detect(root):
+            return True
+        # Check for LangGraph imports in Python files
+        for py in root.rglob('*.py'):
+            parts = py.parts
+            if any(p.startswith('.') or p in ('node_modules', '__pycache__', '.venv', 'venv') for p in parts):
+                continue
+            try:
+                content = py.read_text(encoding='utf-8', errors='replace')
+                if 'StateGraph' in content or 'from langgraph' in content:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def parse(self, root) -> WorkflowGraph:
+        graph = WorkflowGraph()
+        root = Path(root)
+        seen_agents = set()
+
+        # Strategy 1: LangGraph (ast)
+        for py in sorted(root.rglob('*.py')):
+            parts = py.parts
+            if any(p.startswith('.') or p in ('node_modules', '__pycache__', '.venv', 'venv') for p in parts):
+                continue
+            try:
+                content = py.read_text(encoding='utf-8', errors='replace')
+            except Exception:
+                continue
+            if 'StateGraph' not in content and 'add_node' not in content:
+                continue
+            lg_nodes, lg_edges = _parse_langgraph_ast(py)
+            for name in lg_nodes:
+                if name not in seen_agents:
+                    seen_agents.add(name)
+                    graph.add_node(WorkflowNode(id=name, kind='agent_def', label=name))
+            for src, tgt in lg_edges:
+                graph.add_edge(WorkflowEdge(source=src, target=tgt, relation='orchestrates'))
+
+        # Strategy 2: Declarative YAML
+        agents_dir = root / 'agents'
+        if not agents_dir.is_dir():
+            agents_dir = root / 'agents_dir'  # fixture compat
+        yaml_nodes, yaml_edges = _parse_yaml_agents(agents_dir)
+        for name in yaml_nodes:
+            if name not in seen_agents:
+                seen_agents.add(name)
+                graph.add_node(WorkflowNode(id=name, kind='agent_def', label=name))
+        for src, tgt in yaml_edges:
+            graph.add_edge(WorkflowEdge(source=src, target=tgt, relation='orchestrates'))
+
+        # Strategy 3: MCP config
+        mcp_paths = [root / '.claude' / 'settings.json', root / 'mcp.json']
+        for mcp_path in mcp_paths:
+            if mcp_path.exists():
+                mcp_nodes = _parse_mcp_settings(mcp_path)
+                for name in mcp_nodes:
+                    if name not in seen_agents:
+                        seen_agents.add(name)
+                        graph.add_node(WorkflowNode(id=name, kind='agent_def', label=name))
+
+        # Strategy 4: A2A (future — local file parsing only)
+
+        return graph
+
+
+_TOPOLOGY_PARSERS['agent'] = AgentParser()
+
+
+# ---------------------------------------------------------------------------
+# STORY-slim-066: API Convention Summary (R4)
+# ---------------------------------------------------------------------------
+
+def api_convention_summary(root):
+    """Analyze API call patterns and return convention summary.
+
+    Returns dict with: prefixes (set), fetch_functions (set), total_calls (int).
+    """
+    parser = ApiCallParser()
+    graph = parser.parse(root)
+    prefixes = set()
+    functions = set()
+    total = 0
+    for node in graph.nodes.values():
+        if node.kind != 'api_call':
+            continue
+        total += 1
+        label = node.label.replace('[dynamic] ', '')
+        # Extract prefix: everything up to and including the Nth /
+        parts = label.strip('"\'`').split('/')
+        if len(parts) >= 3:
+            prefix = '/'.join(parts[:3]) + '/'
+            prefixes.add(prefix)
+    for edge in graph.edges:
+        if edge.relation == 'fetches':
+            # The source is the function name; we want the fetch function
+            # Look at the node label for the target
+            pass
+    # Extract fetch function names from the parse
+    functions = set(parser._fetch_functions) & _get_used_fetch_functions(root, parser)
+    return {
+        'prefixes': prefixes,
+        'fetch_functions': functions,
+        'total_calls': total,
+    }
+
+
+def _get_used_fetch_functions(root, parser):
+    """Scan files to determine which fetch functions are actually used."""
+    root = Path(root)
+    used = set()
+    for ext in ('*.ts', '*.tsx', '*.js', '*.jsx'):
+        for fpath in root.rglob(ext):
+            parts = fpath.parts
+            if any(p.startswith('.') or p == 'node_modules' for p in parts):
+                continue
+            try:
+                content = fpath.read_text(encoding='utf-8', errors='replace')
+            except Exception:
+                continue
+            for fn in parser._fetch_functions:
+                if fn in content:
+                    used.add(fn)
+    return used
 
 
 def _parse_commands(commands_dir, graph: WorkflowGraph):

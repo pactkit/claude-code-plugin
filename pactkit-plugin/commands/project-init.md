@@ -87,7 +87,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 
 ## 🎬 Phase 5: Knowledge Base (The Law)
 1.  **Law**: Write `docs/architecture/governance/rules.md`.
-2.  **History**: Write `docs/architecture/governance/lessons.md`.
+2.  **History**: Write `docs/architecture/governance/lessons.md` with table header `| Date | Lesson | Context |` and separator `|------|--------|---------|`. The third column MUST be `Context`, not `Source`.
 
 ## 🎬 Phase 6: Session Context Bootstrap
 1.  **Generate Context**: Run `pactkit context` to generate `docs/product/context.md`. Set "Last updated by" to `/project-init`.
