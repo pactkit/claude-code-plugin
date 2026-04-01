@@ -20,7 +20,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  Run `pactkit visualize --lazy` to update graphs only if source files changed (file, `--mode class`, `--mode call`). If skipped, log: "Graph up-to-date — no source changes".
 3.  **HLD Consistency Check**: Run `pactkit doctor` and check HLD drift. If drift > 3, WARN user: "system_design.mmd is {N} modules behind — consider updating it."
 
-## 🎬 Phase 2.5: Regression Gate (MANDATORY)
+## 🎬 Phase 2.5: Regression Gate (CRITICAL)
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.
 
 ### Step 0: Source Change Pre-Check
@@ -66,7 +66,7 @@ Otherwise continue to Step 1.7.
 > **DEFAULT**: Run **full regression**. Run incremental only if: `code_graph.mmd` recently updated, ≤ 3 source files changed, test mappings exist via `LANG_PROFILES[stack].test_map_pattern`, no high-fan-in files (3+ importers), no test infra changes. For fast/small suites (< 500 tests), skip the decision tree and run full.
 > **Fallback**: If `code_graph.mmd` does not exist, always run full regression.
 
-### Step 2.3: Decision Logging (MANDATORY)
+### Step 2.3: Decision Logging (MUST)
 After evaluating the decision tree, log the decision with format: `"Regression: {TYPE} — {reason}"` (e.g., SKIP, STORY-ONLY, FULL, IMPACT-BASED, INCREMENTAL).
 
 ### Step 2.5: Coverage Verification (Conditional)
@@ -100,19 +100,19 @@ Run `pactkit coverage-gate <changed-files>` to verify coverage on changed source
 2.  **Auto-Fix**:
     - If tests are GREEN but tasks are `[ ]`, **Ask the user**: "Tests passed but tasks are unchecked. Mark as done?"
     - If user agrees, update `sprint_board.md` immediately.
-3.  **Lessons Auto-append (MANDATORY)**: Run `pactkit lesson-append --story {STORY_ID} --text "lesson text" [--context "file.py:func"]`.
+3.  **Lessons Auto-append (MUST)**: Run `pactkit lesson-append --story {STORY_ID} --text "lesson text" [--context "file.py:func"]`.
     - The command checks specificity (references concrete file/function?) and dedup (different from last 5 entries?).
     - If both pass: appends row using format `{LESSONS_ROW_FORMAT}` where date=YYYY-MM-DD, context={STORY_ID}
     - If either fails: skip with log from command output.
     - If `pactkit lesson-append` is unavailable, fall back to manual append with the same checks.
-4.  **Invariants Refresh (MANDATORY)**: Run `pactkit invariants-refresh --test-count {N}` where {N} is the actual count from the most recent test run.
+4.  **Invariants Refresh (MUST)**: Run `pactkit invariants-refresh --test-count {N}` where {N} is the actual count from the most recent test run.
     - The command updates `docs/architecture/governance/rules.md` invariant "All {N}+ tests must pass".
     - If `pactkit invariants-refresh` is unavailable, fall back to manual: read rules.md, find the pattern, replace the number.
 5.  **Document Validators (Non-blocking)**: Run document structure checks as warnings:
     - `pactkit lint-context` — validates `docs/product/context.md` structure
     - `pactkit lint-lessons` — validates `docs/architecture/governance/lessons.md` structure
     - These are non-blocking: report warnings but do not stop the Done flow.
-6.  **Spec Status Update (MANDATORY)**: Run `pactkit spec-status docs/specs/{STORY_ID}.md Done` to update `| Status | Draft |` to `| Status | Done |` in the spec file. If `pactkit spec-status` is unavailable, manually edit the spec file.
+6.  **Spec Status Update (MUST)**: Run `pactkit spec-status docs/specs/{STORY_ID}.md Done` to update `| Status | Draft |` to `| Status | Done |` in the spec file. If `pactkit spec-status` is unavailable, manually edit the spec file.
 7.  **Memory MCP (Conditional)**: IF Memory MCP is available, use add_observations to record lessons learned (patterns, pitfalls, key files) on the `{STORY_ID}` entity.
 
 ## 🎬 Phase 3.5: Archive (Optional)

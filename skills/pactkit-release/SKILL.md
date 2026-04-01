@@ -27,7 +27,7 @@ Version release management — update versions, snapshot architecture, create Gi
 - Run `snapshot "$VERSION"` via pactkit-board skill.
 - Result: graphs saved to `docs/architecture/snapshots/{version}_*.mmd`.
 
-### 2.5. Pre-Tag Gate (MANDATORY)
+### 2.5. Pre-Tag Gate (CRITICAL)
 - Run lint: `pactkit lint` (falls back to `ruff check src/ tests/`).
 - Run tests: `pactkit regression` (falls back to `pytest tests/ -q`).
 - If either fails: **STOP. Do NOT tag.** Fix the issue, re-commit, then re-run this gate.

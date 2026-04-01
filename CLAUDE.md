@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.9.4 Modular)
+# PactKit Global Constitution (v2.9.10 Modular)
 
 # Core Protocol
 
@@ -84,52 +84,63 @@ Select `model` based on task complexity:
 ### Init (`/project-init`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-init.md`
+- **When NOT to use**: Project already has `pactkit.yaml` and `docs/product/sprint_board.md`. Use `pactkit update` instead to sync after upgrades.
 
 ### Plan (`/project-plan`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-plan.md`
+- **When NOT to use**: Greenfield with no existing code — use `/project-design` first. For typos/config fixes — use `/project-hotfix` (no Spec needed).
 
 ### Clarify (`/project-clarify`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-clarify.md`
+- **When NOT to use**: Requirements are already clear and specific. Plan Phase 0.7 auto-triggers Clarify when ambiguity is detected — no need to invoke manually unless you want to force it.
 
 ### Act (`/project-act`)
 - **Role**: Senior Developer
 - **Playbook**: `commands/project-act.md`
+- **When NOT to use**: No Spec exists yet — use `/project-plan` first. For typos/config/style fixes — use `/project-hotfix` (skips TDD overhead).
 
 ### Check (`/project-check`)
 - **Role**: QA Engineer
 - **Playbook**: `commands/project-check.md`
 - **Responsibility**: Security Scan, Test Case Generation, API vs Browser.
+- **When NOT to use**: Just want to run tests — use `pytest` directly. Act Phase 3 already runs regression; Check is for dedicated QA after implementation is complete.
 
 ### Done (`/project-done`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-done.md`
+- **When NOT to use**: Code is not yet implemented — use `/project-act` first. For version releases — use `/project-release` (Done archives stories; Release tags versions).
 
 ### Release (`/project-release`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-release.md`
 - **Goal**: Version release: snapshot, archive, and Git tag.
+- **When NOT to use**: Just finishing a story — use `/project-done` (archive + commit). Release is for version milestones with changelog, tag, and PyPI publish.
 
 ### PR (`/project-pr`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-pr.md`
 - **Goal**: Push branch and create pull request via gh CLI.
+- **When NOT to use**: Working on main branch directly (sole developer). PR is for branch-based collaboration workflows.
 
 ### Sprint (`/project-sprint`)
 - **Role**: Team Lead (Orchestrator)
 - **Playbook**: `commands/project-sprint.md`
 - **Goal**: Automated PDCA Sprint orchestration via Subagent Team.
+- **When NOT to use**: Single story to implement — use `/project-act` directly. Sprint orchestrates multiple stories via subagent team; overkill for one story.
 
 ### Hotfix (`/project-hotfix`)
 - **Role**: Senior Developer
 - **Playbook**: `commands/project-hotfix.md`
 - **Goal**: Lightweight fast-fix channel that bypasses PDCA.
+- **When NOT to use**: Change requires design decisions or has multiple requirements — use `/project-plan` + `/project-act` for full PDCA traceability.
 
 ### Design (`/project-design`)
 - **Role**: Product Designer
 - **Playbook**: `commands/project-design.md`
 - **Goal**: Greenfield product design: PRD generation, story decomposition, board setup.
+- **When NOT to use**: Adding a feature to an existing project — use `/project-plan` (single story). Design is for greenfield products or major multi-story initiatives.
 
 ## Embedded Skills (auto-invoked by commands above)
 

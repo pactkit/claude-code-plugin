@@ -19,7 +19,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 4.  **Detect Stack & Select Stack Reference**: Identify the project type from source files (`.py`, `.ts`/`.tsx`, `.go`, `.java`). Apply the corresponding language-specific best practices throughout implementation and testing.
 5.  **Memory MCP (Conditional)**: IF Memory MCP is available, use search_nodes to load prior context for {STORY_ID} — retrieve architectural decisions and design rationale from the Plan phase.
 
-## 🛡️ Phase 0.5: Spec Lint Gate (Mandatory)
+## 🛡️ Phase 0.5: Spec Lint Gate (MUST)
 > **PURPOSE**: Non-AI structural validation — ensures "Spec is Law" has physical enforcement before any code is written.
 1.  **Run Linter**: Execute the Spec Linter on the current Story's spec:
     ```bash
