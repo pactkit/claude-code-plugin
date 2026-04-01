@@ -51,7 +51,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 1.  **Scan Reality**: Run `{VISUALIZE_CMD} visualize`.
     - *Goal*: If this is an existing project, overwrite the empty `code_graph.mmd` with the REAL class structure immediately.
 2.  **Class Scan**: Run `{VISUALIZE_CMD} visualize --mode class`.
-3.  **Verify**: Read `docs/architecture/graphs/code_graph.mmd` and `class_graph.mmd`.
+3.  **Module Scan**: Run `{VISUALIZE_CMD} visualize --mode module` to generate module-level overview for multi-module projects.
+4.  **Verify**: Read `docs/architecture/graphs/code_graph.mmd` and `class_graph.mmd`.
     - *Check*: Is it still "No code yet"? If files exist in src, this graph MUST contain classes.
 
 ## 🎬 Phase 4: Project Skeleton

@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.9.11 Modular)
+# PactKit Global Constitution (v2.9.12 Modular)
 
 # Core Protocol
 
@@ -11,9 +11,10 @@ If "Last updated" date is before today, suggest running `$daily-retro`.
 
 ## Visual First
 Before modifying code:
-- Run `visualize` to view module dependency graph
+- Run `visualize` to view file dependency graph
 - Run `visualize --mode class` for class inheritance
 - Run `visualize --mode call --entry <func>` to trace call chains
+- Run `visualize --mode module` for module-level architectural overview
 - **PDCA Exemption**: When a PDCA command is active, the command's own visualize phases take precedence — skip Visual First.
 
 ## Strict TDD

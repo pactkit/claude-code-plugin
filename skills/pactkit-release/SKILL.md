@@ -23,7 +23,7 @@ Version release management — update versions, snapshot architecture, create Gi
 - Backfill Specs: run `pactkit backfill-release $VERSION` to replace `Release: TBD` in completed specs.
 
 ### 2. Architecture Snapshot
-- Run `visualize` (all three modes: file, class, call).
+- Run `visualize` (all four modes: file, class, call, module).
 - Run `snapshot "$VERSION"` via pactkit-board skill.
 - Result: graphs saved to `docs/architecture/snapshots/{version}_*.mmd`.
 
