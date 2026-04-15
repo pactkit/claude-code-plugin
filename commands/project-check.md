@@ -7,7 +7,12 @@ allowed-tools: [Read, Bash, Grep, Glob]
 - **Usage**: `/project-check $ARGUMENTS`
 - **Agent**: QA Engineer
 
-> **PRINCIPLE**: Check is a verification-only operation; identify issues but do not fix them.
+> **PRINCIPLE**: Check is a verification-only operation; identify issues but NEVER modify code — fixes made during QA bypass the TDD loop and produce untested changes.
+
+> **TOOL RESTRICTION**: This entire command is analysis-only.
+> NEVER use Edit, Write, or Bash write operations (e.g., `sed -i`, `tee`, `>`, `>>`) in any phase.
+> Tool calls that modify files will produce incorrect analysis — the QA verdict
+> must reflect the code AS-IS, not code you changed during review.
 
 ## Severity Levels
 
@@ -72,7 +77,7 @@ Apply a code quality checklist to all code related to the Story:
 For each finding, assign a severity (P0-P3). Flag issues that may cause silent failures.
 
 ## Phase 3: Spec Verification & Test Case Definition (The Law)
-1.  **Verify Spec Structure**: Run `pactkit spec-lint docs/specs/{STORY_ID}.md` to validate Spec structure (E006 checks for `## Acceptance Criteria`).
+1.  **Verify Spec Structure**: Run `pactkit spec-lint docs/specs/{STORY_ID}.md` (or `python3 -m pactkit spec-lint docs/specs/{STORY_ID}.md` if `pactkit` is not on `$PATH`) to validate Spec structure (E006 checks for `## Acceptance Criteria`).
     * *If ERRORs*: WARN the user — "Spec structure issues found. Run `/project-plan` to fix."
     * *If WARNs only*: Note warnings and continue.
 2.  **Extract Scenarios**: List all Scenarios from the Spec's `## Acceptance Criteria` section.

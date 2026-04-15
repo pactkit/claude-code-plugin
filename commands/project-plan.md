@@ -75,7 +75,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 ## 🎬 Phase 2: Design & Impact
 1.  **Diff**: Compare User Request vs Current Reality (from Phase 1).
-2.  **Update HLD**: Modify `docs/architecture/graphs/system_design.mmd`.
+2.  **Duplication Audit**: Run the Duplication Audit from system-architect protocol — if this is the Nth same-kind implementation, grep existing implementations and assess shared abstraction needs before writing Spec.
+3.  **Update HLD**: Modify `docs/architecture/graphs/system_design.mmd`.
     - *Rule*: Keep the `code_graph.mmd` as is (it updates automatically).
 
 ## 🎬 Phase 3.1: Story ID Generation
@@ -105,13 +106,13 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 4.  **Output checkpoint**: Print "Security scope filled. Running lint."
 
 ## 🎬 Phase 3.2d: Spec Lint Self-Check
-1.  Run `pactkit spec-lint docs/specs/{ID}.md`.
+1.  Run `pactkit spec-lint docs/specs/{ID}.md`. If `pactkit` is not on `$PATH`, use `python3 -m pactkit spec-lint docs/specs/{ID}.md` instead.
 2.  If any ERROR or WARNING rules fire, self-correct the Spec immediately (you wrote it — you have authority to fix it). Re-run until `pactkit spec-lint` reports 0 errors AND 0 warnings.
 3.  This prevents the Spec from being rejected at Act Phase 0.5.
 4.  **Output checkpoint**: Print "Spec lint passed (0 errors AND 0 warnings)."
 
 ## 🎬 Phase 3.3: Board, Memory & Handover
-1.  **Board**: Add Story using `add_story`.
+1.  **Board**: Add Story: `{BOARD_CMD} add_story "{STORY_ID}" "{title}" "{task1}|{task2}|..."` (all three arguments are required).
 2.  **Memory MCP (Conditional)**: IF Memory MCP is available, use create_entities to store design context (decisions, target files, rationale) under entity `{STORY_ID}`. Record story dependencies if applicable.
 3.  **Session Context Update**: Run `pactkit context` to generate `docs/product/context.md`. Set "Last updated by" to `/project-plan`.
 4.  **Handover**: "Trace complete. Spec created. Ready for Act."

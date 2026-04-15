@@ -24,6 +24,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.
 
 ### Step 0: Source Change Pre-Check
+- **Act-to-Done Fast Path**: If `context.md` shows the last command was `/project-act` AND the Act commit already passed regression + lint (check context.md Agent Continuation or last-command field), skip the entire Phase 2.5 with log: `"Regression: SKIP — Act already verified, no intervening changes"`. Proceed directly to Phase 3.
 - Run `git diff --name-only HEAD~1` (or vs. branch base) to list all changed files.
 - Filter for source and test files only (exclude docs, configs, graphs).
 - If **no source/test files changed** since the last commit (e.g., only docs, board, graphs, or config changed): log `"Regression: SKIP — no source/test changes since Act"` and proceed directly to Step 2.7 (Smart Lint Gate). This avoids re-running 3000+ tests when Act already verified the code.
@@ -81,6 +82,7 @@ Run `pactkit coverage-gate <changed-files>` to verify coverage on changed source
 ### Step 2.7: Smart Lint Gate (STORY-030)
 > **Purpose**: Stack-aware lint check with configurable behavior.
 
+0. **Act-to-Done Fast Path**: If `context.md` shows the last command was `/project-act` AND `git diff HEAD --name-only` shows no source/test file changes since the Act commit, skip lint with log: `"Lint: SKIP — Act already passed lint, no new changes"`. Proceed to Step 3.
 1. Run `pactkit lint` to execute the stack-aware lint gate. This auto-detects the project stack, reads `lint_command` from `LANG_PROFILES`, and respects `auto_fix` and `lint_blocking` from `pactkit.yaml`.
    - If `auto_fix: true` in config: `pactkit lint` runs fix pass first, then check pass.
    - If `lint_blocking: true` and lint fails: **STOP** the commit. Report errors and do NOT proceed.

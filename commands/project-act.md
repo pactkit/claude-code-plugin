@@ -25,6 +25,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     ```bash
     pactkit spec-lint docs/specs/{STORY_ID}.md
     ```
+    If `pactkit` is not on `$PATH`, use `python3 -m pactkit spec-lint docs/specs/{STORY_ID}.md` instead.
     Replace `{STORY_ID}` with the actual Story ID from `$ARGUMENTS` (e.g., `STORY-042`).
 2.  **If ERRORs found**: **STOP**. Output all ERROR and WARN items. Instruct the user:
     > "Spec Lint failed. Fix the issues above in `docs/specs/{STORY_ID}.md`, then re-run `/project-act`."
@@ -49,7 +50,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - For **agent**: Check AgentParser output for orchestration edges so new code doesn't break agent flow.
 
 ## 🎬 Phase 2: Test Scaffolding (TDD)
-1.  **Constraint**: DO NOT write source code yet.
+1.  **Constraint**: NEVER write source code in this phase — doing so breaks TDD causality: tests must exist before the code they verify.
 2.  **Action**: Create a reproduction test case in `tests/unit/`.
     - Use the knowledge from Phase 1 to mock/stub dependencies correctly.
 
@@ -65,7 +66,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **Regression Check (Read-Only Gate)**: After the TDD loop is GREEN, run the project's test suite as a broader regression check.
     - Run `pactkit regression` (uses `git diff` + `LANG_PROFILES` to classify: SKIP/FULL/IMPACT). Doc-only changes are auto-skipped.
     - If IMPACT: run `pactkit test-map <changed-files>` for incremental test selection. If any changed file has 3+ importers in `code_graph.mmd`, run full suite. Fallback: full suite.
-    - **CRITICAL — Pre-existing test failure protocol**: If a pre-existing test fails, **DO NOT modify** it. **STOP** and report to the user. This is a one-shot check, not an iterative loop.
+    - **CRITICAL — Pre-existing test failure protocol**: If a pre-existing test fails, NEVER modify it — doing so silently corrupts the regression baseline. **STOP** and report to the user. This is a one-shot check, not an iterative loop.
 4.  **Lint Gate**: Run `pactkit lint` to check code style. If lint errors are found, fix them before proceeding. If `pactkit lint` is unavailable, run the stack's lint command directly.
 
 ## 🎬 Phase 4: Sync & Document
