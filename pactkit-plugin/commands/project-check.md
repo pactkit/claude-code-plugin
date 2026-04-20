@@ -7,7 +7,12 @@ allowed-tools: [Read, Bash, Grep, Glob]
 - **Usage**: `/project-check $ARGUMENTS`
 - **Agent**: QA Engineer
 
-> **PRINCIPLE**: Check is a verification-only operation; identify issues but do not fix them.
+> **PRINCIPLE**: Check is a verification-only operation; identify issues but NEVER modify code — fixes made during QA bypass the TDD loop and produce untested changes.
+
+> **TOOL RESTRICTION**: This entire command is analysis-only.
+> NEVER use Edit, Write, or Bash write operations (e.g., `sed -i`, `tee`, `>`, `>>`) in any phase.
+> Tool calls that modify files will produce incorrect analysis — the QA verdict
+> must reflect the code AS-IS, not code you changed during review.
 
 ## Severity Levels
 
@@ -72,7 +77,7 @@ Apply a code quality checklist to all code related to the Story:
 For each finding, assign a severity (P0-P3). Flag issues that may cause silent failures.
 
 ## Phase 3: Spec Verification & Test Case Definition (The Law)
-1.  **Verify Spec Structure**: Run `pactkit spec-lint docs/specs/{STORY_ID}.md` to validate Spec structure (E006 checks for `## Acceptance Criteria`).
+1.  **Verify Spec Structure**: Run `pactkit spec-lint docs/specs/{STORY_ID}.md` (or `python3 -m pactkit spec-lint docs/specs/{STORY_ID}.md` if `pactkit` is not on `$PATH`) to validate Spec structure (E006 checks for `## Acceptance Criteria`).
     * *If ERRORs*: WARN the user — "Spec structure issues found. Run `/project-plan` to fix."
     * *If WARNs only*: Note warnings and continue.
 2.  **Extract Scenarios**: List all Scenarios from the Spec's `## Acceptance Criteria` section.
@@ -110,6 +115,28 @@ For each finding, assign a severity (P0-P3). Flag issues that may cause silent f
 * **Chrome DevTools MCP**: IF available, use for performance tracing.
 * **`e2e.env_file`** (default `.env.test`): Load test credentials (API tokens, DB strings) from this file before running E2E. If file missing, WARN but continue.
 * **`e2e.blocking`** (default `false`): If `false`, E2E failures → WARN. If `true`, E2E failures → FAIL (blocks `/project-done`).
+
+## Phase 4.5: PactGuard Compliance Scan (Config-Gated)
+> Read `pactkit.yaml` field `check.pactguard.enabled`. Default: `false` (skip).
+
+1.  If `check.pactguard.enabled` is `false` (default) → **silently skip** this phase entirely. Do NOT add a row to the Verdict table.
+2.  If enabled: check if `pactguard` CLI is available (`which pactguard`). If not found → silently skip.
+3.  Run: `pactguard check --mode {check.pactguard.mode} -r {check.pactguard.ruleset} --json-output <changed_files>`
+    - If `check.pactguard.ruleset` is empty, omit the `-r` flag (use PactGuard defaults).
+4.  Parse JSON output. Add to Phase 5 Verdict table: `PactGuard | PASS/WARN/FAIL | N violations`
+5.  If `check.pactguard.blocking: true` and violations found → contribute FAIL to overall verdict.
+6.  If `pactguard` exits with error → add `PactGuard | WARN | execution error` to Verdict. Do NOT block.
+
+## Phase 4.7: Observability Scan (Config-Gated)
+> Read `pactkit.yaml` field `check.observe.enabled`. Default: `false` (skip).
+
+1.  If `check.observe.enabled` is `false` (default) → **silently skip** this phase entirely. Do NOT add a row to the Verdict table.
+2.  If enabled: detect available MCP sources (`mcp__chrome-devtools__*`, `mcp__playwright__*`). If none available → silently skip.
+3.  Collect signals (or run `pactkit observe --json` for structured collection):
+    - Chrome DevTools: `list_console_messages`, `list_network_requests` (cap: `check.observe.max_console`, `check.observe.max_network`)
+    - Playwright: `browser_take_screenshot` for post-test visual verification
+4.  Classify signals by severity (ERROR/WARNING/INFO per R3 in Spec).
+5.  Add to Phase 5 Verdict table: `Observability | PASS/WARN/FAIL | N console errors, M network failures`
 
 ## Phase 5: The Verdict
 1.  **Run Unit (Incremental)**: Run `pactkit test-map <changed-files>` to map source files to test files. Run only mapped tests. Fallback to full suite if no mapping.

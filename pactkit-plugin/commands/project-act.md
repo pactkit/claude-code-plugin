@@ -19,12 +19,13 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 4.  **Detect Stack & Select Stack Reference**: Identify the project type from source files (`.py`, `.ts`/`.tsx`, `.go`, `.java`). Apply the corresponding language-specific best practices throughout implementation and testing.
 5.  **Memory MCP (Conditional)**: IF Memory MCP is available, use search_nodes to load prior context for {STORY_ID} — retrieve architectural decisions and design rationale from the Plan phase.
 
-## 🛡️ Phase 0.5: Spec Lint Gate (Mandatory)
+## 🛡️ Phase 0.5: Spec Lint Gate (MUST)
 > **PURPOSE**: Non-AI structural validation — ensures "Spec is Law" has physical enforcement before any code is written.
 1.  **Run Linter**: Execute the Spec Linter on the current Story's spec:
     ```bash
     pactkit spec-lint docs/specs/{STORY_ID}.md
     ```
+    If `pactkit` is not on `$PATH`, use `python3 -m pactkit spec-lint docs/specs/{STORY_ID}.md` instead.
     Replace `{STORY_ID}` with the actual Story ID from `$ARGUMENTS` (e.g., `STORY-042`).
 2.  **If ERRORs found**: **STOP**. Output all ERROR and WARN items. Instruct the user:
     > "Spec Lint failed. Fix the issues above in `docs/specs/{STORY_ID}.md`, then re-run `/project-act`."
@@ -49,7 +50,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - For **agent**: Check AgentParser output for orchestration edges so new code doesn't break agent flow.
 
 ## 🎬 Phase 2: Test Scaffolding (TDD)
-1.  **Constraint**: DO NOT write source code yet.
+1.  **Constraint**: NEVER write source code in this phase — doing so breaks TDD causality: tests must exist before the code they verify.
 2.  **Action**: Create a reproduction test case in `tests/unit/`.
     - Use the knowledge from Phase 1 to mock/stub dependencies correctly.
 
@@ -65,9 +66,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **Regression Check (Read-Only Gate)**: After the TDD loop is GREEN, run the project's test suite as a broader regression check.
     - Run `pactkit regression` (uses `git diff` + `LANG_PROFILES` to classify: SKIP/FULL/IMPACT). Doc-only changes are auto-skipped.
     - If IMPACT: run `pactkit test-map <changed-files>` for incremental test selection. If any changed file has 3+ importers in `code_graph.mmd`, run full suite. Fallback: full suite.
-    - **CRITICAL — Pre-existing test failure protocol**: If a pre-existing test fails, **DO NOT modify** it. **STOP** and report to the user. This is a one-shot check, not an iterative loop.
+    - **CRITICAL — Pre-existing test failure protocol**: If a pre-existing test fails, NEVER modify it — doing so silently corrupts the regression baseline. **STOP** and report to the user. This is a one-shot check, not an iterative loop.
 4.  **Lint Gate**: Run `pactkit lint` to check code style. If lint errors are found, fix them before proceeding. If `pactkit lint` is unavailable, run the stack's lint command directly.
 
 ## 🎬 Phase 4: Sync & Document
 1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed).
 2.  **Update Board (CRITICAL)**: Run `{BOARD_CMD} update_task {STORY_ID} "Task Name"` for each completed task to mark it as `[x]`.
+3.  **Update Continuation State**: Run `pactkit context --continuation --last-command "/project-act {STORY_ID}" --phase "Phase 4: complete"` to record the agent's stopping point for session handoff.

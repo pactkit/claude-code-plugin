@@ -20,10 +20,11 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  Run `pactkit visualize --lazy` to update graphs only if source files changed (file, `--mode class`, `--mode call`). If skipped, log: "Graph up-to-date — no source changes".
 3.  **HLD Consistency Check**: Run `pactkit doctor` and check HLD drift. If drift > 3, WARN user: "system_design.mmd is {N} modules behind — consider updating it."
 
-## 🎬 Phase 2.5: Regression Gate (MANDATORY)
+## 🎬 Phase 2.5: Regression Gate (CRITICAL)
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.
 
 ### Step 0: Source Change Pre-Check
+- **Act-to-Done Fast Path**: If `context.md` shows the last command was `/project-act` AND the Act commit already passed regression + lint (check context.md Agent Continuation or last-command field), skip the entire Phase 2.5 with log: `"Regression: SKIP — Act already verified, no intervening changes"`. Proceed directly to Phase 3.
 - Run `git diff --name-only HEAD~1` (or vs. branch base) to list all changed files.
 - Filter for source and test files only (exclude docs, configs, graphs).
 - If **no source/test files changed** since the last commit (e.g., only docs, board, graphs, or config changed): log `"Regression: SKIP — no source/test changes since Act"` and proceed directly to Step 2.7 (Smart Lint Gate). This avoids re-running 3000+ tests when Act already verified the code.
@@ -66,7 +67,7 @@ Otherwise continue to Step 1.7.
 > **DEFAULT**: Run **full regression**. Run incremental only if: `code_graph.mmd` recently updated, ≤ 3 source files changed, test mappings exist via `LANG_PROFILES[stack].test_map_pattern`, no high-fan-in files (3+ importers), no test infra changes. For fast/small suites (< 500 tests), skip the decision tree and run full.
 > **Fallback**: If `code_graph.mmd` does not exist, always run full regression.
 
-### Step 2.3: Decision Logging (MANDATORY)
+### Step 2.3: Decision Logging (MUST)
 After evaluating the decision tree, log the decision with format: `"Regression: {TYPE} — {reason}"` (e.g., SKIP, STORY-ONLY, FULL, IMPACT-BASED, INCREMENTAL).
 
 ### Step 2.5: Coverage Verification (Conditional)
@@ -81,6 +82,7 @@ Run `pactkit coverage-gate <changed-files>` to verify coverage on changed source
 ### Step 2.7: Smart Lint Gate (STORY-030)
 > **Purpose**: Stack-aware lint check with configurable behavior.
 
+0. **Act-to-Done Fast Path**: If `context.md` shows the last command was `/project-act` AND `git diff HEAD --name-only` shows no source/test file changes since the Act commit, skip lint with log: `"Lint: SKIP — Act already passed lint, no new changes"`. Proceed to Step 3.
 1. Run `pactkit lint` to execute the stack-aware lint gate. This auto-detects the project stack, reads `lint_command` from `LANG_PROFILES`, and respects `auto_fix` and `lint_blocking` from `pactkit.yaml`.
    - If `auto_fix: true` in config: `pactkit lint` runs fix pass first, then check pass.
    - If `lint_blocking: true` and lint fails: **STOP** the commit. Report errors and do NOT proceed.
@@ -100,20 +102,21 @@ Run `pactkit coverage-gate <changed-files>` to verify coverage on changed source
 2.  **Auto-Fix**:
     - If tests are GREEN but tasks are `[ ]`, **Ask the user**: "Tests passed but tasks are unchecked. Mark as done?"
     - If user agrees, update `sprint_board.md` immediately.
-3.  **Lessons Auto-append (MANDATORY)**: Run `pactkit lesson-append --story {STORY_ID} --text "lesson text" [--context "file.py:func"]`.
+3.  **Lessons Auto-append (MUST)**: Run `pactkit lesson-append --story {STORY_ID} --text "lesson text" [--context "file.py:func"]`.
     - The command checks specificity (references concrete file/function?) and dedup (different from last 5 entries?).
     - If both pass: appends row using format `{LESSONS_ROW_FORMAT}` where date=YYYY-MM-DD, context={STORY_ID}
     - If either fails: skip with log from command output.
     - If `pactkit lesson-append` is unavailable, fall back to manual append with the same checks.
-4.  **Invariants Refresh (MANDATORY)**: Run `pactkit invariants-refresh --test-count {N}` where {N} is the actual count from the most recent test run.
+4.  **Invariants Refresh (MUST)**: Run `pactkit invariants-refresh --test-count {N}` where {N} is the actual count from the most recent test run.
     - The command updates `docs/architecture/governance/rules.md` invariant "All {N}+ tests must pass".
     - If `pactkit invariants-refresh` is unavailable, fall back to manual: read rules.md, find the pattern, replace the number.
 5.  **Document Validators (Non-blocking)**: Run document structure checks as warnings:
     - `pactkit lint-context` — validates `docs/product/context.md` structure
     - `pactkit lint-lessons` — validates `docs/architecture/governance/lessons.md` structure
     - These are non-blocking: report warnings but do not stop the Done flow.
-6.  **Spec Status Update (MANDATORY)**: Run `pactkit spec-status docs/specs/{STORY_ID}.md Done` to update `| Status | Draft |` to `| Status | Done |` in the spec file. If `pactkit spec-status` is unavailable, manually edit the spec file.
+6.  **Spec Status Update (MUST)**: Run `pactkit spec-status docs/specs/{STORY_ID}.md Done` to update `| Status | Draft |` to `| Status | Done |` in the spec file. If `pactkit spec-status` is unavailable, manually edit the spec file.
 7.  **Memory MCP (Conditional)**: IF Memory MCP is available, use add_observations to record lessons learned (patterns, pitfalls, key files) on the `{STORY_ID}` entity.
+8.  **Harness Audit Refresh (Conditional)**: Run `pactkit audit --append --if-needed {STORY_ID}`. Only refreshes when `harness_audit.json` exists AND its `story_id` matches `{STORY_ID}` (this story owns the audit). Silently skips if no audit was ever run or if the audit belongs to a different story. If it runs and `ready` changed from `true` to `false`, WARN the user.
 
 ## 🎬 Phase 3.5: Archive (Optional)
 1.  **Check**: Are all tasks for the current Story marked `[x]`?
@@ -144,11 +147,12 @@ Run `pactkit coverage-gate <changed-files>` to verify coverage on changed source
 
 ## 🎬 Phase 4: Git Commit
 0.  **Enterprise Check**: If `enterprise.no_git: true` in `pactkit.yaml`, skip ALL git operations in this phase. Print: "ℹ️ Git operations disabled (enterprise.no_git)". Skip to the Session Context Update phase.
-0.5.  **Deployment Verification (MANDATORY)**: Before committing, verify code changes are reflected in the deployed environment:
+0.5.  **Deployment Verification (self-dev only)**: Only when developing PactKit itself (`pyproject.toml` name == "pactkit"):
     - Run `pactkit update` to redeploy all prompts, agents, commands, skills, and rules.
-    - Smoke-check: for each AC that references prompt/deployed file content, `grep` 1-2 key assertions on deployed files (e.g., `~/.claude/commands/*.md`).
+    - Smoke-check: for each AC that references prompt/deployed file content, `grep` 1-2 key assertions on deployed files (e.g., `{GLOBAL_CONFIG_DIR}/commands/*.md`).
     - Report: `Deploy verification: PASS ({N} assertions checked)` or `FAIL (details)`.
     - If FAIL, fix the deployment issue before committing.
+    - **If NOT self-dev**: Skip this step silently.
 1.  **Format**: `feat(scope): <title from spec>`
 2.  **Execute**: Run the git commit command.
 3.  **Post-Commit Prompts**:
@@ -161,5 +165,5 @@ Run `pactkit coverage-gate <changed-files>` to verify coverage on changed source
       4. If `gh` CLI is unavailable or command fails, skip silently.
 
 ## 🎬 Phase 4.5: Session Context Update
-1.  Run `pactkit context` to generate `docs/product/context.md` (sections: {CONTEXT_SECTIONS}). Set "Last updated by" to `/project-done`.
+1.  Run `pactkit context` to generate `docs/product/context.md` (sections: {CONTEXT_SECTIONS}). Set "Last updated by" to `/project-done`. This also clears the Agent Continuation section to `No active work session.` since no `--continuation` flag is passed.
 2.  **Commit Context**: `git add docs/product/context.md && git commit --amend --no-edit` to include context.md in the commit.

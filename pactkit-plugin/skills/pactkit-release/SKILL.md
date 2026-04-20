@@ -23,9 +23,15 @@ Version release management — update versions, snapshot architecture, create Gi
 - Backfill Specs: run `pactkit backfill-release $VERSION` to replace `Release: TBD` in completed specs.
 
 ### 2. Architecture Snapshot
-- Run `visualize` (all three modes: file, class, call).
+- Run `visualize` (all four modes: file, class, call, module).
 - Run `snapshot "$VERSION"` via pactkit-board skill.
 - Result: graphs saved to `docs/architecture/snapshots/{version}_*.mmd`.
+
+### 2.5. Pre-Tag Gate (CRITICAL)
+- Run lint: `pactkit lint` (falls back to `ruff check src/ tests/`).
+- Run tests: `pactkit regression` (falls back to `pytest tests/ -q`).
+- If either fails: **STOP. Do NOT tag.** Fix the issue, re-commit, then re-run this gate.
+- Report: `Pre-tag gate: PASS` or `Pre-tag gate: FAIL (details)`.
 
 ### 3. Git Operations
 - Run `archive` via pactkit-board skill.

@@ -1,24 +1,29 @@
-# PactKit Global Constitution (v2.9.2 Modular)
+# PactKit Global Constitution (v2.10.2 Modular)
 
 # Core Protocol
 
 ## Session Context
 On new session, run `pactkit update --if-needed` to sync project files if PactKit was upgraded.
+If `pactkit.yaml` does not exist (check `{PROJECT_CONFIG_DIR}/`), run `pactkit init` to create it before proceeding.
 Then read `docs/product/context.md` to understand project state before taking action.
 If the file is missing, suggest `/project-init` to bootstrap the project.
 If "Last updated" date is before today, suggest running `$daily-retro`.
 
+## PDCA Nudge
+When AI analysis in free conversation (outside PDCA command context) yields actionable conclusions — bugs, architecture improvements, new feature needs — SHOULD recommend the appropriate PDCA command at the end of the reply. See `11-pdca-nudge.md` for trigger matrix and suppression rules.
+
 ## Visual First
 Before modifying code:
-- Run `visualize` to view module dependency graph
+- Run `visualize` to view file dependency graph
 - Run `visualize --mode class` for class inheritance
 - Run `visualize --mode call --entry <func>` to trace call chains
+- Run `visualize --mode module` for module-level architectural overview
 - **PDCA Exemption**: When a PDCA command is active, the command's own visualize phases take precedence — skip Visual First.
 
 ## Strict TDD
 - Write tests first (RED), then write implementation (GREEN)
 - The agent MUST NOT skip TDD except when running `/project-hotfix`
-- All tests must pass before committing
+- All tests MUST pass before committing
 
 ## Language Matching
 - Match the user's language (Chinese→Chinese, English→English).
@@ -34,6 +39,20 @@ Select `model` based on task complexity:
 | **opus** | Architecture decisions, deep reasoning, multi-step planning |
 
 **Cost**: haiku ~10x cheaper than sonnet, sonnet ~5x cheaper than opus.
+
+## Signal Strength Convention
+All rules and playbooks MUST use signal keywords consistently per this 4-level hierarchy:
+
+| Level | Keywords | Semantics | Use When |
+|-------|----------|-----------|----------|
+| **L1 Absolute** | `NEVER` / `MUST NOT` | Violation = bug, zero tolerance | Security red lines, data loss, Spec tampering |
+| **L2 Strong** | `CRITICAL` / `MUST` / `ALWAYS` | Violation = must-fix issue | Phase gates, TDD enforcement, regression blocking |
+| **L3 Recommended** | `IMPORTANT` / `SHOULD` | Violation = warning, non-blocking | Best practices, performance advice, style |
+| **L4 Advisory** | `Prefer` / `Consider` / `If possible` | Suggestion, skip by judgment | Optimization hints, optional enhancements |
+
+- `NEVER` and `MUST NOT` are reserved for L1 — do not use them for anything less than absolute prohibition.
+- `DO NOT` is ambiguous — replace with `NEVER` (L1) or `MUST NOT` (L1) for prohibitions, or rephrase as `SHOULD NOT` (L3) for recommendations.
+- When writing an L1 or L2 rule, append a consequence clause: `— {what goes wrong if violated}`.
 
 # The Hierarchy of Truth
 > **CRITICAL**: Code is NOT the law.
@@ -52,9 +71,9 @@ Select `model` based on task complexity:
 - This exception does NOT weaken the general principle (Spec > Code) — it adds a safety valve for genuinely impossible requirements
 
 ## Pre-existing Test Protocol
-- If a pre-existing test fails during regression, **do not modify** the failing test or the code it tests
+- If a pre-existing test fails during regression, NEVER modify the failing test or the code it tests — doing so silently corrupts the regression baseline and the failure will only surface in CI
 - STOP and report: which test failed, what it tests, which change caused it
-- You MUST NOT assume you understand the design intent behind pre-existing tests
+- MUST NOT assume you understand the design intent behind pre-existing tests — misinterpreting intent leads to tests that pass but verify the wrong behavior
 
 ## Operating Guidelines
 - Before modifying code, you must first read the relevant Spec (`docs/specs/`)
@@ -83,52 +102,63 @@ Select `model` based on task complexity:
 ### Init (`/project-init`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-init.md`
+- **When NOT to use**: Project already has `pactkit.yaml` and `docs/product/sprint_board.md`. Use `pactkit update` instead to sync after upgrades.
 
 ### Plan (`/project-plan`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-plan.md`
+- **When NOT to use**: Greenfield with no existing code — use `/project-design` first. For typos/config fixes — use `/project-hotfix` (no Spec needed).
 
 ### Clarify (`/project-clarify`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-clarify.md`
+- **When NOT to use**: Requirements are already clear and specific. Plan Phase 0.7 auto-triggers Clarify when ambiguity is detected — no need to invoke manually unless you want to force it.
 
 ### Act (`/project-act`)
 - **Role**: Senior Developer
 - **Playbook**: `commands/project-act.md`
+- **When NOT to use**: No Spec exists yet — use `/project-plan` first. For typos/config/style fixes — use `/project-hotfix` (skips TDD overhead).
 
 ### Check (`/project-check`)
 - **Role**: QA Engineer
 - **Playbook**: `commands/project-check.md`
 - **Responsibility**: Security Scan, Test Case Generation, API vs Browser.
+- **When NOT to use**: Just want to run tests — use `pytest` directly. Act Phase 3 already runs regression; Check is for dedicated QA after implementation is complete.
 
 ### Done (`/project-done`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-done.md`
+- **When NOT to use**: Code is not yet implemented — use `/project-act` first. For version releases — use `/project-release` (Done archives stories; Release tags versions).
 
 ### Release (`/project-release`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-release.md`
 - **Goal**: Version release: snapshot, archive, and Git tag.
+- **When NOT to use**: Just finishing a story — use `/project-done` (archive + commit). Release is for version milestones with changelog, tag, and PyPI publish.
 
 ### PR (`/project-pr`)
 - **Role**: Repo Maintainer
 - **Playbook**: `commands/project-pr.md`
 - **Goal**: Push branch and create pull request via gh CLI.
+- **When NOT to use**: Working on main branch directly (sole developer). PR is for branch-based collaboration workflows.
 
 ### Sprint (`/project-sprint`)
 - **Role**: Team Lead (Orchestrator)
 - **Playbook**: `commands/project-sprint.md`
 - **Goal**: Automated PDCA Sprint orchestration via Subagent Team.
+- **When NOT to use**: Single story to implement — use `/project-act` directly. Sprint orchestrates multiple stories via subagent team; overkill for one story.
 
 ### Hotfix (`/project-hotfix`)
 - **Role**: Senior Developer
 - **Playbook**: `commands/project-hotfix.md`
 - **Goal**: Lightweight fast-fix channel that bypasses PDCA.
+- **When NOT to use**: Change requires design decisions or has multiple requirements — use `/project-plan` + `/project-act` for full PDCA traceability.
 
 ### Design (`/project-design`)
 - **Role**: Product Designer
 - **Playbook**: `commands/project-design.md`
 - **Goal**: Greenfield product design: PRD generation, story decomposition, board setup.
+- **When NOT to use**: Adding a feature to an existing project — use `/project-plan` (single story). Design is for greenfield products or major multi-story initiatives.
 
 ## Embedded Skills (auto-invoked by commands above)
 
@@ -246,7 +276,7 @@ If source files changed (per `LANG_PROFILES[stack].source_dirs`) OR `code_graph.
 Map changed source files to test files via `LANG_PROFILES[stack].test_map_pattern`. If no mapping can be determined, fall back to the full test suite.
 
 ## Context.md Canonical Format
-> Referenced by: Init Phase 6, Plan Phase 3, Done Phase 4.5
+> Referenced by: Init Phase 6, Plan Phase 3, Act Phase 4, Done Phase 4.5
 
 Write `docs/product/context.md` using this format:
 ```markdown
@@ -374,5 +404,49 @@ Compose entire file in head → one Write call at the end
 ```
 Write skeleton → Edit block 1 → checkpoint → Edit block 2 → checkpoint → ...
 ```
+
+# PDCA Nudge Protocol
+
+> **Signal Level**: L3 Recommended (SHOULD) — non-blocking suggestion.
+
+## When to Nudge
+
+When AI analysis in **free conversation** (outside any PDCA command context) produces actionable conclusions, SHOULD append a PDCA command recommendation at the end of the reply.
+
+## Trigger Matrix
+
+| Signal | Command | Condition |
+|--------|---------|-----------|
+| Bug / error found (single file) | `/project-hotfix` | Single-file fix, no design decision needed |
+| Bug + design change needed | `/project-plan` | Multi-file or unclear requirements |
+| Architecture improvement identified | `/project-plan` | Involves 2+ file changes |
+| New feature need identified | `/project-plan` | Single feature |
+| New product / multi-feature need | `/project-design` | 3+ independent stories, greenfield |
+| Existing Spec ready to implement | `/project-act STORY-XXX` | Story is on the Board |
+| 3+ independent improvement items | `/project-sprint` | Multiple stories can run in parallel |
+| Code quality issue (quick fix) | `/project-hotfix` | No behavior change |
+
+## Nudge Format
+
+Place at the **end** of the reply, after all analysis content:
+
+```
+💡 This analysis can be tracked via `{command}`:
+> {one-sentence reason why this command fits}
+```
+
+When replying in Chinese, use:
+
+```
+💡 这个分析结果可以通过 `{command}` 来跟踪实现：
+> {一句话说明为什么推荐这个命令}
+```
+
+## Suppression Rules (MUST NOT nudge when)
+
+- **In PDCA context**: A PDCA command is already active (Plan/Act/Check/Done/Sprint/Hotfix/Design)
+- **User opted out**: User explicitly said they just want to chat, not follow a workflow
+- **No issue found**: Analysis confirms the current implementation is correct
+- **Dedup**: The same command was already nudged earlier in this conversation
 
 > **TIP**: Run `/project-init` to set up project governance and enable cross-session context.

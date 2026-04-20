@@ -1,11 +1,11 @@
 ---
 name: pactkit-visualize
-description: "Generate project code dependency graph (Mermaid), supporting file-level, class-level, and function-level call chain analysis"
+description: "Generate project code dependency graph (Mermaid), supporting file-level, class-level, function-level, and module-level analysis"
 ---
 
 # PactKit Visualize
 
-Generate project code relationship graphs (Mermaid format), supporting three analysis modes.
+Generate project code relationship graphs (Mermaid format), supporting four analysis modes.
 
 > **Script location**: Use the base directory from the skill invocation header to resolve script paths.
 
@@ -17,7 +17,7 @@ Generate project code relationship graphs (Mermaid format), supporting three ana
 
 ### visualize -- Generate code dependency graph
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize [--mode file|class|call] [--entry <func>] [--focus <module>]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visualize [--mode file|class|call|module] [--entry <func>] [--focus <module>]
 ```
 
 | Parameter | Description | Default |
@@ -25,8 +25,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visu
 | `--mode file` | File-level dependency graph (inter-module import relationships) | Default |
 | `--mode class` | Class diagram (including inheritance) | - |
 | `--mode call` | Function-level call graph | - |
+| `--mode module` | Module-level dependency graph with weighted cross-module edges | - |
 | `--entry <func>` | BFS transitive chain tracing from specified function (requires `--mode call`) | - |
-| `--focus <module>` | Focus on call relationships of specified module (requires `--mode call`) | - |
+| `--focus <module>` | Scope scan to a specific module directory (works with file, class, call modes) | - |
 
 ### init_arch -- Initialize architecture directory
 ```
@@ -48,6 +49,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py list
 | `--mode file` | `docs/architecture/graphs/code_graph.mmd` | graph TD |
 | `--mode class` | `docs/architecture/graphs/class_graph.mmd` | classDiagram |
 | `--mode call` | `docs/architecture/graphs/call_graph.mmd` | graph TD |
+| `--mode module` | `docs/architecture/graphs/module_graph.mmd` | graph TD |
 | `--focus` (file) | `docs/architecture/graphs/focus_file_graph.mmd` | graph TD |
 | `--focus` (class) | `docs/architecture/graphs/focus_class_graph.mmd` | classDiagram |
 | `--focus` (call) | `docs/architecture/graphs/focus_call_graph.mmd` | graph TD |

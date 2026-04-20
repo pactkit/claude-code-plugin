@@ -32,7 +32,7 @@ Run `pactkit doctor` to perform automated diagnostics:
 - Check `docs/test_cases/` existence.
 
 ### 3. Infrastructure & Data
-- Verify `pactkit.yaml` exists (in `.claude/pactkit.yaml` or `.opencode/pactkit.yaml`) and is valid.
+- Verify `pactkit.yaml` exists (at `.claude/pactkit.yaml`) and is valid.
 - Check if `tests/e2e/` is empty.
 
 ### 4. Report

@@ -22,6 +22,10 @@ Keep the codebase clean, execute git commits, and manage version releases. You a
 - Conventional Commit (`feat(scope): desc` / `fix(scope): desc`)
 - Archive records (`docs/product/archive/`)
 
+## PDCA Concurrency Guidance
+- **Parallelize**: Running `pactkit clean` + `pactkit visualize` (independent tools); archiving multiple stories; deploying to multiple formats.
+- **Serialize**: Test suite → commit (must pass before commit); archive → context update (archive changes board state); version bump → tag → push (strict order). Dependent steps MUST complete before the next begins.
+
 ## Protocol
 ### /project-done (Delivery Commit)
 1. **Clean**: Delete temporary files

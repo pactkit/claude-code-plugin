@@ -132,7 +132,7 @@ Assign each Story to a horizon:
       - `## Acceptance Criteria` — Given/When/Then scenarios
       - Add Priority Score to the spec header: `- **Priority**: {score} (Impact {I} / Effort {E})`
 4.  **Security Scope**: After filling each Spec, run `pactkit sec-scope <changed-files>` to populate the `## Security Scope` section. If `pactkit sec-scope` is unavailable, manually fill SEC-1 through SEC-8.
-5.  **Spec Lint Self-Check**: After each Spec is generated, run `pactkit spec-lint docs/specs/{STORY_ID}.md`. If ERRORs found, self-correct and re-run until clean. This prevents malformed Specs from blocking the Sprint pipeline at Act Phase 0.5.
+5.  **Spec Lint Self-Check**: After each Spec is generated, run `pactkit spec-lint docs/specs/{STORY_ID}.md` (or `python3 -m pactkit spec-lint docs/specs/{STORY_ID}.md` if `pactkit` is not on `$PATH`). If ERRORs found, self-correct and re-run until clean. This prevents malformed Specs from blocking the Sprint pipeline at Act Phase 0.5.
 5.  **Batch Checkpoint**: Every 3 Specs completed, print a progress checkpoint (e.g., "3/8 Specs created. Continuing."). This prevents unbounded continuous output.
 6.  **Dependency Graph**: Add a Mermaid dependency graph at the end of the PRD showing Story execution order and critical path.
 
