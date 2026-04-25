@@ -43,11 +43,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py archive
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py list_stories
 ```
 
-### update_version -- Update version number
-```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py update_version 1.0.0
-```
-
 ### snapshot -- Architecture snapshot
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py snapshot "v1.0.0"
@@ -68,5 +63,5 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py fix_board
 - `/project-plan`: Use `add_story` to create a Story
 - `/project-act`: Use `update_task` to mark completed tasks
 - `/project-done`: Use `archive` to archive completed Stories
-- `pactkit-release` skill: Use `update_version` + `snapshot` to publish a release
+- `pactkit-release` skill: Use `snapshot` to archive architecture graphs during release
 - `pactkit-doctor` skill: Use `fix_board` to repair misplaced stories

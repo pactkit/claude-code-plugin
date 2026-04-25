@@ -24,7 +24,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 > **NOTE**: This playbook is pre-rendered per-format during deployment. All paths below are already resolved for **{DISPLAY_NAME}** (`{FORMAT_NAME}`). No runtime IDE detection needed.
 1.  **Check CLI Availability**: Run `pactkit version` to check if CLI is available.
     - **If available**: Proceed to Step 2.
-    - **If NOT available** (command fails): Print warning: "⚠️ pactkit CLI not found. Install with: `pip install pactkit`". Then manually create a minimal `pactkit.yaml` in `{PROJECT_CONFIG_DIR}/` with `stack: <detected>`, `version: 0.0.1`, `root: .`, `developer: ""` and skip to Step 3.
+    - **If NOT available** (command fails): Print warning: "⚠️ pactkit CLI not found. Install with: `pip install pactkit`". Then manually create a minimal `pactkit.yaml` in `{PROJECT_CONFIG_DIR}/` with `stack: <detected>`, `root: .`, `developer: ""` and skip to Step 3.
 2.  **Generate Config**: Check if `{PACTKIT_YAML}` exists.
     - **If missing**: Run `pactkit init --format {FORMAT_NAME}`
     - **If exists**: Run `pactkit update --format {FORMAT_NAME}`

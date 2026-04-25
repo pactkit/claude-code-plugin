@@ -226,25 +226,6 @@ def update_task(sid, tasks_list):
     return f"❌ Task not found in {sid}: {task_name}. Unchecked: [{remaining}]"
 
 
-def update_version(version):
-    # STORY-072: Multi-path lookup (.claude/ then .opencode/)
-    yaml_path = None
-    for c in [".claude/pactkit.yaml", ".opencode/pactkit.yaml"]:
-        p = Path.cwd() / c
-        if p.exists():
-            yaml_path = p
-            break
-    if yaml_path is None:
-        return "⚠️ No pactkit.yaml found, skipping version update"
-    content = yaml_path.read_text(encoding="utf-8")
-    # R8: Only replace the first/top-level version: key, not nested ones
-    content = re.sub(r"version:\s*\S+", f"version: {version}", content, count=1)
-    # R5 (STORY-slim-052): Atomic write via tmp+rename
-    tmp = yaml_path.with_suffix(".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, yaml_path)
-    return f"✅ Version updated to {version}"
-
 
 def snapshot_graph(version):
     graphs_dir = Path.cwd() / "docs/architecture/graphs"
@@ -388,8 +369,6 @@ if __name__ == "__main__":
     p_upd = sub.add_parser("update_task")
     p_upd.add_argument("story_id")
     p_upd.add_argument("task_name", nargs="+")
-    p_ver = sub.add_parser("update_version")
-    p_ver.add_argument("version")
     p_snap = sub.add_parser("snapshot")
     p_snap.add_argument("version")
     p_move = sub.add_parser("move_story")
@@ -404,8 +383,6 @@ if __name__ == "__main__":
         print(add_story(a.story_id, a.title, a.tasks))
     elif a.cmd == "update_task":
         print(update_task(a.story_id, a.task_name))
-    elif a.cmd == "update_version":
-        print(update_version(a.version))
     elif a.cmd == "snapshot":
         print(snapshot_graph(a.version))
     elif a.cmd == "archive":

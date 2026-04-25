@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.10.4 Modular)
+# PactKit Global Constitution (v2.10.6 Modular)
 
 # Core Protocol
 
@@ -47,12 +47,21 @@ All rules and playbooks MUST use signal keywords consistently per this 4-level h
 |-------|----------|-----------|----------|
 | **L1 Absolute** | `NEVER` / `MUST NOT` | Violation = bug, zero tolerance | Security red lines, data loss, Spec tampering |
 | **L2 Strong** | `CRITICAL` / `MUST` / `ALWAYS` | Violation = must-fix issue | Phase gates, TDD enforcement, regression blocking |
-| **L3 Recommended** | `IMPORTANT` / `SHOULD` | Violation = warning, non-blocking | Best practices, performance advice, style |
+| **L3 Recommended** | `IMPORTANT` / `SHOULD` | Default required — skip requires DEFERRED comment | Best practices, performance advice, style |
 | **L4 Advisory** | `Prefer` / `Consider` / `If possible` | Suggestion, skip by judgment | Optimization hints, optional enhancements |
 
-- `NEVER` and `MUST NOT` are reserved for L1 — do not use them for anything less than absolute prohibition.
-- `DO NOT` is ambiguous — replace with `NEVER` (L1) or `MUST NOT` (L1) for prohibitions, or rephrase as `SHOULD NOT` (L3) for recommendations.
-- When writing an L1 or L2 rule, append a consequence clause: `— {what goes wrong if violated}`.
+- `SHOULD` (L3) is not optional (RFC 2119) — skipping requires a `# DEFERRED(SHOULD): R{N} — reason` comment in code.
+- `NEVER` / `MUST NOT` are reserved for L1 — not for lesser prohibitions.
+- `DO NOT` is ambiguous — use `NEVER` (L1) or `SHOULD NOT` (L3) instead.
+- L1/L2 rules: append a consequence clause `— {what goes wrong}`.
+
+## DEFERRED Comment Format (STORY-slim-105)
+When skipping a SHOULD requirement, leave a traceable comment:
+```
+# DEFERRED(SHOULD): R{N} {requirement name} — {reason for skipping}
+```
+- Enables `grep -r "DEFERRED(SHOULD)" src/` to find all skipped SHOULDs
+- Reason must explain why skipping is acceptable for this release
 
 # The Hierarchy of Truth
 > **CRITICAL**: Code is NOT the law.
@@ -207,6 +216,16 @@ Format: `type(scope): description`
 - Body: Summary + Test Plan
 - Must pass CI and Code Review before merging
 
+## Change Type Declaration (STORY-slim-105)
+Before modifying code, declare the change type:
+
+| Type | Meaning | Requirement |
+|------|---------|-------------|
+| `ROOT_CAUSE` | Fixing the root cause | None |
+| `WORKAROUND` | Temporary bypass | MUST create tech-debt Story |
+
+Choosing WORKAROUND is allowed, but incurs the cost of creating a tracking Story — no silent bypasses.
+
 # MCP Integration (Conditional)
 > **PRINCIPLE**: All MCP instructions are conditional. If an MCP server is not available, skip the instruction gracefully.
 
@@ -309,21 +328,15 @@ Write `docs/product/context.md` using this format:
 
 ## 1. Single Source of Truth (DRY)
 - Every configuration value, schema definition, or structural rule MUST be defined in exactly one place.
-- Canonical locations:
-  - Environment paths/capabilities → `profiles.py` (`FormatProfile`)
-  - Document structure rules → `schemas.py` (`SPEC_REQUIRED_SECTIONS`, `BOARD_SECTIONS`, `CONTEXT_SECTIONS`, etc.)
-  - Valid component sets → `config.py` (`VALID_AGENTS`, `VALID_COMMANDS`, `VALID_SKILLS`, `VALID_RULES`)
-- When standalone scripts (board.py, scaffold.py) cannot import the library, they MUST inline the value with a comment pointing to the canonical source:
-  ```python
-  # Canonical: src/pactkit/schemas.py BOARD_SECTION_BACKLOG
-  _BACKLOG = '## 📋 Backlog'
-  ```
+- **Anti-pattern**: The same logic (e.g., a write-then-invalidate workflow, an IRI sanitization routine, a dual-write SQL statement) implemented independently in 3+ files. Each copy drifts over time — one gets a bugfix, the others don't.
+- **Detection**: During Plan Phase 1 Lateral Scan, if `fan-in ≥ 3` or `grep` finds 3+ independent implementations of the same operation, MUST evaluate extracting a shared service/function.
+- When standalone scripts cannot import the library, they MUST inline the value with a comment pointing to the canonical source.
 - When updating a canonical value, search all inline copies with `grep` and update them in the same commit.
 
 ## 2. Open-Closed Principle (OCP)
-- Adding a new tool format (e.g., `cursor`, `trae`) MUST NOT require modifying existing functions.
-- Pattern: add a new `FormatProfile` entry to `FORMAT_PROFILES` in `profiles.py`. All downstream code (`deployer`, `config`, `CLI`) auto-picks it up.
-- Adding a new document type MUST only require adding constants to `schemas.py` and an entry to `SCHEMA_REGISTRY`.
+- Adding a new variant MUST NOT require modifying existing functions — violates OCP when adding the Nth case means editing a growing if/elif chain.
+- **Anti-pattern**: A `db_type` string checked in 13 if/elif branches across 6 files. Adding a new database type requires touching every branch — use a strategy pattern or registry instead.
+- **Pattern**: Define a registry/dispatch table. New variants add an entry; existing code remains unchanged.
 
 ## 3. Dependency Inversion (DIP)
 - Prompt templates MUST NOT contain hardcoded environment-specific paths.
@@ -343,6 +356,7 @@ Write `docs/product/context.md` using this format:
   - `commands_dir = None` for formats without custom commands
   - `excluded_agent_fields` removes fields invalid for that format
 - Consumers MUST check `if profile.has_custom_commands` before deploying commands — not hardcoded format checks.
+- **Module size**: A single file exceeding 500 lines SHOULD be evaluated for splitting. A 565-line route handler mixing 5 resource domains is a sign that responsibilities are not separated.
 
 ## 6. Defense-in-Depth (Security)
 - **Path traversal**: All file writes use `atomic_write()` which creates parent directories safely.
@@ -364,6 +378,20 @@ Write `docs/product/context.md` using this format:
 - Currently advisory only:
   - context.md, lessons.md, test_case → referenced in playbook text via `{CONTEXT_SECTIONS}`, `{LESSONS_ROW_FORMAT}`
 - When adding a new schema to `schemas.py`, consider whether it needs a linter gate or if prompt-level enforcement is sufficient.
+
+## 9. Merge over Replace (Incremental Sync)
+- When writing to a file that may contain user-modified content or sections managed by other tools, SHOULD use incremental merge (Edit / patch / append) instead of full replacement (Write / overwrite) — full replacement silently destroys content the writer did not generate.
+- **Decision Matrix**:
+
+| Target File Characteristics | Strategy | Rationale |
+|----------------------------|----------|-----------|
+| Generated entirely by this tool, no user sections | Full replace is safe | Writer owns 100% of content |
+| Contains user-modified sections OR mixed ownership | **Incremental merge** | Preserve content this tool did not generate |
+| Config file with default + override pattern | **Merge missing keys only** | Existing values represent user intent |
+| Append-only artifact (changelog, log, history) | **Append** | Never rewrite prior entries |
+
+- **Litmus test**: "Does this file contain content I did not generate?" → If yes, incremental merge. If unsure, incremental merge.
+- **Anti-pattern evidence**: BUG-010 (`_rewrite_yaml` destroyed user config), BUG-slim-089 (`_deploy_claude_md` overwrote user CLAUDE.md), STORY-033/STORY-slim-054 (backfill overwrote existing values). All were full-replace where merge was required.
 
 ## Quick Reference: Where to Make Changes
 
@@ -448,5 +476,157 @@ When replying in Chinese, use:
 - **User opted out**: User explicitly said they just want to chat, not follow a workflow
 - **No issue found**: Analysis confirms the current implementation is correct
 - **Dedup**: The same command was already nudged earlier in this conversation
+
+# Solution Design Protocol
+
+> Referenced by: Plan Phase 1, Act Phase 1
+
+## Purpose
+Evaluate the capability delta (framework native + project existing vs. needs implementation) before writing code — to avoid reinventing what the framework already provides or bypassing what the project has already encapsulated.
+
+## Anti-Patterns This Protocol Prevents
+
+| Anti-Pattern | Example | Consequence |
+|--------------|---------|-------------|
+| **Framework Blindness** | Framework has a caching layer, but writing custom cache from scratch | Duplicated logic, misses framework optimizations and bug fixes |
+| **Project Blindness** | Project has `get_db_connection()`, but creating a new connection directly | Configuration drift, bypasses pooling/retry/logging the project already wired |
+| **Hardcoded Coupling** | Importing a framework's internal module directly instead of using the project's wrapper | Tight coupling to framework internals; breaks when framework upgrades |
+
+## Trigger Conditions
+
+This protocol **MUST** be executed when (SHOULD — skipping increases reinvention risk):
+- New feature involves frameworks already used by the project
+- Requirement involves capabilities that frameworks commonly provide (auth, caching, scheduling, ORM, state management, etc.)
+
+This protocol **MAY** be skipped when:
+- Pure business logic not involving framework capabilities
+- Documentation, configuration, or style changes only
+
+## Protocol Execution
+
+### Step 1: Identify Relevant Frameworks (SHOULD)
+> **Goal**: Know which frameworks the project depends on, filter to those relevant to the requirement.
+
+Read the project's dependency file (`pyproject.toml`, `package.json`, `go.mod`, `pom.xml`, `build.gradle`, `Cargo.toml`, etc.) and identify frameworks related to the current requirement.
+
+**Early exit**: If no frameworks are relevant to the requirement, skip to Step 4 — the answer is "Needs new implementation."
+
+**Output checkpoint**: `"Relevant frameworks: {name} v{version}, ..."`
+
+### Step 2: Query Framework Native Capabilities (SHOULD)
+> **Goal**: Does the framework already provide what we need?
+
+**Query path (by priority):**
+1. **Context7 MCP** (if available) — real-time, authoritative
+2. **WebFetch** official docs (if Context7 unavailable) — real-time, requires parsing
+3. **Training data** (fallback) — MUST declare framework version to avoid outdated APIs
+
+**Focus**: Does the framework natively support this capability? What API or pattern? What config is needed?
+
+**Output checkpoint**: `"Framework capability: {name} supports {capability} via {API/pattern}"` or `"No native support found."`
+
+### Step 3: Query Project Existing Capabilities (SHOULD)
+> **Goal**: What has the project already built or encapsulated from the framework?
+
+Scan the project for:
+- **Framework usage**: Search import statements to see which framework modules are already in use
+- **Abstraction layer**: Look for factory functions (`get_*`, `build_*`, `create_*`), wiring/DI files, and wrapper modules that encapsulate framework details
+- **Call chain**: If the above is insufficient, trace the call graph from the relevant module
+
+**Output checkpoint**:
+```
+Project existing:
+- Framework usage: {module} used in {file}
+- Encapsulated: {function}() in {file} — {purpose}
+```
+
+### Step 3.5: Query Project Internal Patterns (SHOULD)
+> **Goal**: Does the project already have multiple independent implementations of the same operation?
+
+This step catches **intra-project duplication** that Steps 1-3 miss (they focus on framework-level reuse).
+
+**Scan method** (tiered — use the most precise available):
+1. **LSP** (if available): `incomingCalls` or `findReferences` on the core operation — type-aware, zero false positives
+2. **visualize**: `visualize --mode call --reverse --entry <operation>` — fan-in from call graph
+3. **grep**: `grep -rn "<operation>" src/` — text-level fallback
+
+**Output checkpoint**: `"Internal pattern: {operation} has {N} implementations in {files}"`
+
+### Step 4: Delta Assessment (MUST)
+> **Goal**: Decide to reuse or implement.
+
+**Assessment Matrix**
+
+| Framework Has It | Project Uses It | Project Encapsulated | Decision |
+|------------------|-----------------|----------------------|----------|
+| Yes | No | — | **Enable framework capability** — prefer native over custom |
+| Yes | Yes | Yes | **Reuse project wrapper** — do not bypass the abstraction layer |
+| Yes | Yes | No | Evaluate: encapsulate or use directly |
+| No | — | Has similar | **Extend** the existing project implementation |
+| No | — | No | **Implement new** — this is the only case where new code is justified |
+| — | — | ≥ 3 independent | **Extract shared service** — MUST evaluate shared abstraction before adding Nth implementation |
+
+**Decision Constraints**
+- **MUST NOT** bypass project abstraction layer to use framework directly — abstraction exists for unified configuration, testability, and isolation of change
+- **SHOULD** prefer framework native capability over custom implementation — framework code is better tested and community-maintained
+- **MUST** state reasoning if not using an available framework capability
+
+### Step 5: Output Format
+
+**Plan Phase** — write to `## Technical Design` in Spec:
+```markdown
+### Capability Assessment
+| Need | Source | Decision |
+|------|--------|----------|
+| {capability} | {framework}.{module} (native) | Reuse / Enable / New |
+
+### Reuse Points
+- `{function}()` — {file}
+
+### New Implementation Required
+- {component}: {brief purpose}
+```
+
+**Act Phase** — brief assessment in Phase 1:
+```
+Capability assessment: Reuse {N}, Enable {N}, New {N}
+- Reuse: {list}
+- Enable: {list}
+- New: {list}
+```
+
+## Implementation Constraints
+
+When writing new code (Step 4 "Implement new"), apply these constraints:
+
+### No Magic Values (MUST NOT)
+Do not hardcode values that may change (URLs, thresholds, timeouts, feature flags). Extract to named constants or configuration. Exception: truly invariant values (HTTP status codes, math constants).
+
+**Scope**: This constraint applies to **all artifacts**, not just source code — including rules files, Specs, configs, playbooks, and prompts. Any value that appears in 2+ places or that a user/project might need to customize SHOULD be parameterized.
+
+**Flexibility Litmus Test**: If changing a value requires `grep` + multi-file edits, it should be a named constant, config key, or template variable instead.
+
+| Artifact Type | Hardcode Anti-Pattern | Parameterized Pattern |
+|---------------|----------------------|----------------------|
+| Source code | `timeout = 30` | `timeout = config.DEFAULT_TIMEOUT` |
+| Rules / playbooks | `run at most 8 files` | `run at most {MAX_TRACE_FILES} files` or define once, reference by name |
+| Specs | `use SQLite for storage` | `use persistent storage (see Technical Design for engine choice)` |
+| Config (YAML/JSON) | Inline URL `https://api.example.com` | `${API_BASE_URL}` or env-resolved placeholder |
+
+### Open-Closed Principle (SHOULD)
+Design new code to be extensible without modification. If adding a new variant requires `if/elif` chains, consider a registry or strategy pattern instead.
+
+### Single Responsibility (SHOULD)
+Keep functions/classes focused on one concern. If a function name contains "and" or does multiple unrelated things, extract sub-operations.
+
+### Dependency Direction (MUST NOT)
+Do not import from higher-level modules into lower-level modules. Domain/core imports nothing from infrastructure; infrastructure imports from domain. Circular imports indicate a layering violation.
+
+## Interaction with Other Protocols
+
+| Protocol | Relationship |
+|----------|--------------|
+| **pactkit-trace** | Trace = call chains (vertical). This protocol = capability reuse (horizontal). Run Trace first, then this. |
+| **Hierarchy of Truth** | Output goes into Spec (Tier 1). Implementation MUST follow Technical Design in Spec. |
 
 > **TIP**: Run `/project-init` to set up project governance and enable cross-session context.
