@@ -36,7 +36,7 @@ Keep the codebase clean, execute git commits, and manage version releases. You a
 6. **Commit**: Commit in Conventional Commit format
 
 ### Version Release (pactkit-release skill)
-1. **Version**: Use `update_version` to update version number
+1. **Version**: Update version in `pyproject.toml` and `__init__.py`
 2. **Snapshot**: Save architecture snapshot to `docs/architecture/snapshots/`
 3. **Tag**: git tag + commit
 

@@ -25,7 +25,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ## 🛡️ Phase 0.5: Init Guard (Auto-detect)
 1.  Run `pactkit guard` to check init markers (pactkit.yaml via `{PACTKIT_YAML}`, `docs/product/sprint_board.md`, `docs/architecture/graphs/`).
 2.  If exit code 1: project is not initialized — print the missing markers and **STOP**. Suggest running `/project-init`.
-3.  If all exist: check config completeness (hooks, ci, issue_tracker sections). If stale, run `pactkit update` and report what was added.
+3.  If all exist: check config completeness (ci, issue_tracker sections). If stale, run `pactkit update` and report what was added.
 4.  If PASS: proceed to Phase 1.
 
 ## 🧠 Phase 0.7: Clarify Gate (Auto-detect Ambiguity)
@@ -72,6 +72,24 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 3.  **Topology-Aware Trace (Conditional)** — if `detect_topology(root)` includes `api_call` or `agent`:
     - For **api_call**: Run `api_convention_summary(root)` and include path prefixes, fetch function names, and total call count in the Archaeologist Report. This prevents API path convention bugs in downstream implementation.
     - For **agent**: Note orchestration edges from AgentParser (LangGraph/YAML/MCP) in the report so downstream changes respect agent flow.
+4.  **Lateral Scan (MUST for Modification)** — after tracing the target, scan horizontally for existing implementations of the same operation pattern:
+    - Identify the core operation(s) the requirement involves (e.g., "write to OWL", "send notification", "create DB record").
+    - Use a tiered strategy to count existing implementations in the project:
+      - **Prefer LSP** (if available): `incomingCalls` or `findReferences` on the core operation's function/method — gives type-aware, zero-false-positive results.
+      - **Fallback visualize**: `visualize --mode call --reverse --entry <operation>` — reads fan-in from the project's call graph.
+      - **Fallback grep**: `grep -rn "<operation>" src/` — text-level search when neither LSP nor visualize is available.
+    - **Output checkpoint**:
+      ```
+      Lateral Scan:
+      - Operation: {name}
+      - Existing implementations: {N} ({file1}:{func1}, {file2}:{func2}, ...)
+      - Assessment: {Reuse existing | Extract shared abstraction | New is justified}
+      ```
+    - **Threshold**: If the same operation has **≥ 3 independent implementations**, the Spec's Technical Design MUST include a shared abstraction evaluation before adding the Nth implementation.
+    - **Skip condition**: Pure greenfield features with no existing codebase analog — log "Lateral Scan: no existing pattern found" and proceed.
+5.  **Solution Design Protocol (Conditional)** — if the requirement involves frameworks already used by the project:
+    - Execute the **Solution Design Protocol** from `06-solution-design.md` to evaluate capability delta (framework native + project existing vs. needs implementation).
+    - Include the Capability Assessment output in Phase 2 Spec writing.
 
 ## 🎬 Phase 2: Design & Impact
 1.  **Diff**: Compare User Request vs Current Reality (from Phase 1).

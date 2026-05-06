@@ -22,11 +22,19 @@ _IN_PROGRESS = "## 🔄 In Progress"
 _DONE = "## ✅ Done"
 
 
-# --- BOARD ---
-def add_story(sid, title, tasks):
+def _board_path():
+    """Return board path and error message if missing."""
     p = Path.cwd() / "docs/product/sprint_board.md"
     if not p.exists():
-        return "❌ No Board"
+        return None, f"❌ No Board at {p} (cwd: {Path.cwd()}). Ensure you are in the project root."
+    return p, None
+
+
+# --- BOARD ---
+def add_story(sid, title, tasks):
+    p, err = _board_path()
+    if err:
+        return err
     content = p.read_text(encoding="utf-8")
     # R6: Duplicate guard — check if story already exists on board
     existing_blocks = _parse_story_blocks(content)
@@ -91,9 +99,9 @@ def _classify_story(block_text):
 
 
 def fix_board():
-    p = Path.cwd() / "docs/product/sprint_board.md"
-    if not p.exists():
-        return "❌ No Board"
+    p, err = _board_path()
+    if err:
+        return err
     content = p.read_text(encoding="utf-8")
     # Find section boundaries
     bp = content.find(_BACKLOG)
@@ -171,9 +179,9 @@ def _mark_done(content, story_match, story_block, old_task):
 
 def update_task(sid, tasks_list):
     task_name = " ".join(tasks_list)
-    p = Path.cwd() / "docs/product/sprint_board.md"
-    if not p.exists():
-        return "❌ No Board"
+    p, err = _board_path()
+    if err:
+        return err
     content = p.read_text(encoding="utf-8")
     # Locate the story block (BUG-027: support ### and ####)
     story_pat = rf"(#{{3,4}} \[?{re.escape(sid)}\]?:?.*?)(?=\n#{{3,4}} |\Z)"
@@ -226,25 +234,6 @@ def update_task(sid, tasks_list):
     return f"❌ Task not found in {sid}: {task_name}. Unchecked: [{remaining}]"
 
 
-def update_version(version):
-    # STORY-072: Multi-path lookup (.claude/ then .opencode/)
-    yaml_path = None
-    for c in [".claude/pactkit.yaml", ".opencode/pactkit.yaml"]:
-        p = Path.cwd() / c
-        if p.exists():
-            yaml_path = p
-            break
-    if yaml_path is None:
-        return "⚠️ No pactkit.yaml found, skipping version update"
-    content = yaml_path.read_text(encoding="utf-8")
-    # R8: Only replace the first/top-level version: key, not nested ones
-    content = re.sub(r"version:\s*\S+", f"version: {version}", content, count=1)
-    # R5 (STORY-slim-052): Atomic write via tmp+rename
-    tmp = yaml_path.with_suffix(".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, yaml_path)
-    return f"✅ Version updated to {version}"
-
 
 def snapshot_graph(version):
     graphs_dir = Path.cwd() / "docs/architecture/graphs"
@@ -265,9 +254,9 @@ def move_story(sid, target):
     valid_targets = {"backlog": _BACKLOG, "in_progress": _IN_PROGRESS, "done": _DONE}
     if target not in valid_targets:
         return f"❌ Invalid target: {target}. Use: backlog, in_progress, done"
-    p = Path.cwd() / "docs/product/sprint_board.md"
-    if not p.exists():
-        return "❌ No Board"
+    p, err = _board_path()
+    if err:
+        return err
     content = p.read_text(encoding="utf-8")
     blocks = _parse_story_blocks(content)
     # Find the target story (with position)
@@ -310,9 +299,9 @@ def move_story(sid, target):
 
 # --- LIST ---
 def list_stories():
-    p = Path.cwd() / "docs/product/sprint_board.md"
-    if not p.exists():
-        return "❌ No Board"
+    p, err = _board_path()
+    if err:
+        return err
     content = p.read_text(encoding="utf-8")
     headers = list(re.finditer(_TITLE_RE, content, re.MULTILINE))
     if not headers:
@@ -340,10 +329,10 @@ def list_stories():
 
 # --- ARCHIVE ---
 def archive_stories():
-    board_path = Path.cwd() / "docs/product/sprint_board.md"
+    board_path, err = _board_path()
+    if err:
+        return err
     archive_dir = Path.cwd() / "docs/product/archive"
-    if not board_path.exists():
-        return "❌ No Board"
     content = board_path.read_text(encoding="utf-8")
     # BUG-027: Support both ### and #### for backward compatibility
     # R7: Use ITEM_ID_RE instead of hardcoded prefix list
@@ -388,8 +377,6 @@ if __name__ == "__main__":
     p_upd = sub.add_parser("update_task")
     p_upd.add_argument("story_id")
     p_upd.add_argument("task_name", nargs="+")
-    p_ver = sub.add_parser("update_version")
-    p_ver.add_argument("version")
     p_snap = sub.add_parser("snapshot")
     p_snap.add_argument("version")
     p_move = sub.add_parser("move_story")
@@ -404,8 +391,6 @@ if __name__ == "__main__":
         print(add_story(a.story_id, a.title, a.tasks))
     elif a.cmd == "update_task":
         print(update_task(a.story_id, a.task_name))
-    elif a.cmd == "update_version":
-        print(update_version(a.version))
     elif a.cmd == "snapshot":
         print(snapshot_graph(a.version))
     elif a.cmd == "archive":

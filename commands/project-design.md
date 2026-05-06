@@ -69,6 +69,20 @@ For each key screen:
 - **User Flow**: Step-by-step interaction sequence
 - **shadcn Integration (Conditional)**: IF `components.json` exists in the project root, use `mcp__shadcn__search_items_in_registries` to find matching UI components for each page element. Include the shadcn component names (e.g., `@shadcn/button`, `@shadcn/card`) in the component hierarchy.
 
+### 1.5.5 User Journeys
+> **Goal**: Define core end-to-end user journeys that connect Personas to Pages/Screens.
+
+Based on **Personas** (Section 1.2) and **Page/Screen definitions** (Section 1.5), generate user journeys that describe how each persona accomplishes their primary Job-to-be-Done across multiple screens.
+
+1.  **Coverage**: Each Persona SHOULD have at least one journey covering their core Job-to-be-Done.
+2.  **Cap**: MVP (Now horizon) journeys MUST NOT exceed 5 — avoid unmaintainable over-specification.
+3.  **Format**: Follow the journey format specification — each journey includes:
+    - Journey name and one-line goal description
+    - Pre-conditions (Fixtures) table
+    - Numbered steps with execution layer annotations (`[client]`, `[server]`, `[server+client]`)
+    - Structure assertions and behavior assertions per step
+4.  **Write** output to `docs/e2e/journey.md` (create the directory if needed).
+
 ### 1.6 Prototype Generation
 > **Goal**: Generate runnable HTML prototypes for each key page from Section 1.5.
 
@@ -134,7 +148,8 @@ Assign each Story to a horizon:
 4.  **Security Scope**: After filling each Spec, run `pactkit sec-scope <changed-files>` to populate the `## Security Scope` section. If `pactkit sec-scope` is unavailable, manually fill SEC-1 through SEC-8.
 5.  **Spec Lint Self-Check**: After each Spec is generated, run `pactkit spec-lint docs/specs/{STORY_ID}.md` (or `python3 -m pactkit spec-lint docs/specs/{STORY_ID}.md` if `pactkit` is not on `$PATH`). If ERRORs found, self-correct and re-run until clean. This prevents malformed Specs from blocking the Sprint pipeline at Act Phase 0.5.
 5.  **Batch Checkpoint**: Every 3 Specs completed, print a progress checkpoint (e.g., "3/8 Specs created. Continuing."). This prevents unbounded continuous output.
-6.  **Dependency Graph**: Add a Mermaid dependency graph at the end of the PRD showing Story execution order and critical path.
+6.  **Journey Annotation**: If `docs/e2e/journey.md` was generated in Phase 1, annotate each Story's Spec with the journey segment it relates to (e.g., "Journey 1, Step 2-3"). This enables Check Phase 4 to scope E2E tests per story.
+7.  **Dependency Graph**: Add a Mermaid dependency graph at the end of the PRD showing Story execution order and critical path.
 
 ## 🎬 Phase 4: Board Setup
 1.  **Add Stories**: For each Story (ordered by horizon → priority):

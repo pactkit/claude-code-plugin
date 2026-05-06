@@ -25,6 +25,21 @@ Deep code analysis and execution path tracing via static analysis.
 - Follow call chain file by file, recording data transformations.
 - Note how data structures change (e.g., `dict` -> `UserObj` -> `JSON`).
 
+#### Layered Output: Interface Summary vs Full Implementation
+
+| Module Role | Output Level | Content |
+|-------------|-------------|---------|
+| Target (to be modified) | Full implementation | Complete function bodies |
+| Related (dependency, not modified) | Interface summary | Signature + types + docstring only |
+
+**Interface Summary Extraction by Language:**
+
+- **Python**: `def name(params) -> ReturnType:` + docstring + `@decorator` annotations
+- **TypeScript**: `export function/interface/type` declarations + JSDoc comments
+- **Go**: Exported `func Name(params) ReturnType` + struct definitions + godoc comment
+
+Interface summary is produced on-the-fly during trace output — no separate files are generated (DRY: avoid stale pre-generated artifacts).
+
 ### 4. Visual Synthesis
 Output a **Mermaid Sequence Diagram** to visualize the flow.
 

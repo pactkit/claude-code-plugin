@@ -31,6 +31,16 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 6.  **Add Board Entry**: Add the hotfix to the Board:
     - `{BOARD_CMD} add_story HOTFIX-{NNN} "Short title" "Fix description"`
 
+## 🔍 Phase 0.5: Impact Check (Lightweight)
+> **PURPOSE**: Data-driven side-effect awareness — read existing call graphs to surface upstream callers before modifying code. This is advisory (L3 SHOULD), non-blocking.
+1.  **Check Graph Availability**: Look for `docs/architecture/graphs/call_graph.mmd` or `docs/architecture/graphs/reverse_call_graph.mmd` or `docs/architecture/graphs/code_graph.mmd`.
+    - If none exist: log "No call graph available — skipping impact check" and proceed to Phase 1.
+2.  **Identify Callers**: Search the available `.mmd` file for the target function/file identified in Phase 0. Count how many other nodes reference it (callers/importers).
+3.  **High-Fan-In Warning**: If the target has **3+ callers**, SHOULD warn the user:
+    > "⚠️ Target has {N} callers in the call graph. Changes may affect upstream consumers. Consider `/project-act` for full impact analysis."
+    - This warning is advisory — the user can acknowledge and proceed.
+4.  **Proceed**: Continue to Phase 1 regardless of findings.
+
 ## 🔧 Phase 1: Fix
 1.  **Fix**: Use `Edit` or `Write` to directly fix the target code.
 2.  **Scope**: Keep the modification scope as small as possible — only change what must be changed, no extra optimization or refactoring.

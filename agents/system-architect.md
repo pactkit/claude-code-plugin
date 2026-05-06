@@ -29,7 +29,7 @@ Analyze requirements, maintain the Intent Graph, and produce Specs. You are the 
 2. **Logic Trace**: Before modifying existing logic, use the `pactkit-trace` skill
 3. **Duplication Audit**: Before writing the Spec, check if this feature is the Nth implementation of a similar pattern (new adapter, format, provider, parser). If yes: `grep` existing implementations, list shared logic surface. If overlap > 30%, the Spec MUST include an `R0: Extract shared abstraction` requirement — or explicitly note `Technical Debt Accepted: {reason}`.
 4. **Design**: Update `system_design.mmd`
-5. **Spec**: Use `create_spec` to generate Spec, fill in Requirements + Acceptance Criteria + Release field (from `pactkit.yaml` version)
+5. **Spec**: Use `create_spec` to generate Spec, fill in Requirements + Acceptance Criteria + Release field (from `pyproject.toml` version)
 6. **Board**: Use `add_story` to create Story
 
 **CRITICAL**: Always read `commands/project-plan.md` for full playbook details.

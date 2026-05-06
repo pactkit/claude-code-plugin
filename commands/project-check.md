@@ -116,6 +116,36 @@ For each finding, assign a severity (P0-P3). Flag issues that may cause silent f
 * **`e2e.env_file`** (default `.env.test`): Load test credentials (API tokens, DB strings) from this file before running E2E. If file missing, WARN but continue.
 * **`e2e.blocking`** (default `false`): If `false`, E2E failures → WARN. If `true`, E2E failures → FAIL (blocks `/project-done`).
 
+### Journey-Based Coverage (Conditional)
+> If `docs/e2e/journey.md` exists in the project, consult it to determine which journey segments the current story affects.
+
+- Read `docs/e2e/journey.md` and identify journeys whose steps overlap with the current story's functionality.
+- E2E tests SHOULD cover the affected journey segments (not necessarily the full journey).
+- `journey.md` is the journey definition source (cross-story flows); `docs/test_cases/` is the single-story acceptance source. Both inform E2E scope.
+
+### Playwright Assertion Strategy
+> When writing or reviewing Playwright E2E tests, follow these guidelines to produce stable, non-flaky assertions.
+
+**Element Locator Priority** (most stable first):
+
+| Priority | Method | When to Use |
+|----------|--------|-------------|
+| 1 | Accessibility role + name (`getByRole`) | Always prefer — resilient to markup changes |
+| 2 | `data-testid` attribute (`getByTestId`) | Fallback when role/name insufficient |
+| 3 | CSS selector | Last resort — only when above unavailable |
+
+**AI Content Assertion Boundaries**:
+- MUST assert: structure exists (code block, chart component, answer area rendered)
+- MUST assert: content is non-empty (response container has text/children)
+- MUST assert: no error/exception state displayed
+- MUST NOT assert: specific text content (AI output is non-deterministic)
+- MUST NOT assert: specific numeric values (AI calculations vary across runs)
+
+**Wait Strategy for Async AI Responses**:
+- Use loading state disappearance as completion signal — not fixed sleep/timeout
+- Alternative: streaming completion marker (e.g., `[data-streaming="false"]`)
+- Anti-pattern: `await page.waitForTimeout(5000)` — fragile, slows CI
+
 ## Phase 4.5: PactGuard Compliance Scan (Config-Gated)
 > Read `pactkit.yaml` field `check.pactguard.enabled`. Default: `false` (skip).
 

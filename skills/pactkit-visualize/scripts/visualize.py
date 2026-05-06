@@ -23,8 +23,12 @@ class LanguageAnalyzer(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def extract_functions_and_calls(self, file_path) -> tuple:
-        """Return (func_registry, call_edges) for one file."""
+    def extract_functions_and_calls(self, file_path, include_complexity=False) -> tuple:
+        """Return (func_registry, call_edges) or (func_registry, call_edges, complexity_map) for one file.
+
+        When include_complexity=False (default): returns 2-tuple for backward compatibility.
+        When include_complexity=True: returns 3-tuple with complexity_map: dict[str, int].
+        """
         ...
 
     @abc.abstractmethod
@@ -96,17 +100,117 @@ class TreeSitterAnalyzer(LanguageAnalyzer):
         except Exception:
             return []
 
-    def extract_functions_and_calls(self, file_path):
+    def extract_functions_and_calls(self, file_path, include_complexity=False):
         try:
             source = file_path.read_bytes()
             tree = self._parser.parse(source)
-            return self._extract_funcs_and_calls(tree, file_path.stem)
+            result = self._extract_funcs_and_calls(tree, file_path.stem)
+            if include_complexity:
+                func_registry, call_edges = result
+                complexity_map = self._compute_complexity(tree)
+                return func_registry, call_edges, complexity_map
+            return result
         except Exception:
-            return {}, {}
+            return ({}, {}, {}) if include_complexity else ({}, {})
 
     def _extract_funcs_and_calls(self, tree, stem):
         """Override in subclasses for language-specific extraction logic."""
         return {}, {}
+
+    def _compute_complexity(self, tree):
+        """Compute cyclomatic complexity for all functions in the tree.
+
+        Uses tree-sitter node types common to most languages.
+        Subclasses can override for language-specific nodes.
+        Returns dict[str, int] mapping qualified function name to complexity score.
+        """
+        _DECISION_TYPES = {
+            'if_statement', 'else_clause',
+            'for_statement', 'for_in_statement',
+            'while_statement', 'do_statement',
+            'catch_clause', 'except_clause',
+            'case_clause', 'switch_case',
+            'ternary_expression', 'conditional_expression',
+            'binary_expression',  # handled below for && / ||
+        }
+        _BOOL_OPS = {'&&', '||', 'and', 'or'}
+
+        complexity_map = {}
+
+        for _, match_dict in self._matches(self._func_query, tree.root_node):
+            names = match_dict.get('name', [])
+            bodies = match_dict.get('body', [])
+            if not names or not bodies:
+                continue
+            func_name = names[0].text.decode()
+            # Check for enclosing class
+            class_name = None
+            parent = names[0].parent
+            while parent:
+                if parent.type in ('class_declaration', 'class_definition'):
+                    name_node = parent.child_by_field_name('name')
+                    if name_node:
+                        class_name = name_node.text.decode()
+                    break
+                parent = parent.parent
+            qname = f'{class_name}.{func_name}' if class_name else func_name
+
+            count = 1  # base complexity
+            stack = [bodies[0]]
+            while stack:
+                node = stack.pop()
+                if node.type in _DECISION_TYPES:
+                    if node.type == 'binary_expression':
+                        op_node = node.child_by_field_name('operator')
+                        if op_node and op_node.text and op_node.text.decode() in _BOOL_OPS:
+                            count += 1
+                    elif node.type == 'else_clause':
+                        # Only count else-if, not plain else
+                        has_if_child = any(c.type == 'if_statement' for c in node.children)
+                        if has_if_child:
+                            pass  # The nested if_statement will be counted
+                        # Plain else does not add to complexity
+                    else:
+                        count += 1
+                for child in node.children:
+                    stack.append(child)
+            complexity_map[qname] = count
+
+        # Also handle methods if _method_query exists
+        if self._method_query:
+            for _, match_dict in self._matches(self._method_query, tree.root_node):
+                names = match_dict.get('name', [])
+                bodies = match_dict.get('body', [])
+                receivers = match_dict.get('receiver_type', [])
+                if not names or not bodies:
+                    continue
+                func_name = names[0].text.decode()
+                receiver_type = ''
+                if receivers:
+                    raw = receivers[0].text.decode()
+                    receiver_type = self._re.sub(r'[*& \[\]]', '', raw).strip()
+                qname = f'{receiver_type}.{func_name}' if receiver_type else func_name
+
+                count = 1
+                stack = [bodies[0]]
+                while stack:
+                    node = stack.pop()
+                    if node.type in _DECISION_TYPES:
+                        if node.type == 'binary_expression':
+                            op_node = node.child_by_field_name('operator')
+                            if op_node and op_node.text and op_node.text.decode() in _BOOL_OPS:
+                                count += 1
+                        elif node.type == 'else_clause':
+                            has_if_child = any(c.type == 'if_statement' for c in node.children)
+                            if has_if_child:
+                                pass
+                        else:
+                            count += 1
+                    for child in node.children:
+                        stack.append(child)
+                complexity_map[qname] = count
+
+        return complexity_map
 
     def _extract_calls_from_body(self, body_node):
         """Extract call targets from a function/method body node."""
@@ -173,24 +277,27 @@ class PythonAnalyzer(LanguageAnalyzer):
         except (SyntaxError, UnicodeDecodeError, ValueError):
             return []
 
-    def extract_functions_and_calls(self, file_path):
-        """Parse a Python file and return (func_registry, call_edges) for that file."""
+    def extract_functions_and_calls(self, file_path, include_complexity=False):
+        """Parse a Python file and return (func_registry, call_edges) or 3-tuple with complexity_map."""
         try:
             if file_path.stat().st_size > MAX_FILE_BYTES:
                 import sys as _sys
                 print(f"\u26a0\ufe0f Skipping large file: {file_path} ({file_path.stat().st_size} bytes)", file=_sys.stderr)
-                return {}, {}
+                return ({}, {}, {}) if include_complexity else ({}, {})
             source_text = file_path.read_text(encoding='utf-8')
             tree = ast.parse(source_text)
             rel = file_path.stem
             func_registry = {}
             call_edges = {}
+            complexity_map = {}
             class_defs = {}
             for node in ast.iter_child_nodes(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     qname = node.name
                     func_registry[qname] = rel
                     call_edges[qname] = _extract_calls(node, current_class=None, source_text=source_text)
+                    if include_complexity:
+                        complexity_map[qname] = _compute_python_complexity(node)
                 elif isinstance(node, ast.ClassDef):
                     class_defs[node.name] = node
                     for item in node.body:
@@ -198,6 +305,8 @@ class PythonAnalyzer(LanguageAnalyzer):
                             qname = f'{node.name}.{item.name}'
                             func_registry[qname] = rel
                             call_edges[qname] = _extract_calls(item, current_class=node.name, source_text=source_text)
+                            if include_complexity:
+                                complexity_map[qname] = _compute_python_complexity(item)
             # STORY-slim-068 R3: Add virtual edges for inheritance overrides
             for cls_name, cls_node in class_defs.items():
                 sub_methods = {item.name for item in cls_node.body
@@ -218,9 +327,11 @@ class PythonAnalyzer(LanguageAnalyzer):
                                 call_edges[base_qname].append(sub_qname)
                             else:
                                 call_edges[base_qname] = [sub_qname]
+            if include_complexity:
+                return func_registry, call_edges, complexity_map
             return func_registry, call_edges
         except (SyntaxError, UnicodeDecodeError, ValueError):
-            return {}, {}
+            return ({}, {}, {}) if include_complexity else ({}, {})
 
     def extract_classes(self, file_path, root):
         """Extract class definitions from a Python file using ast."""
@@ -269,6 +380,35 @@ class PythonAnalyzer(LanguageAnalyzer):
     def normalize_import(self, import_str, consumer_path, root):
         """Python imports are already in dot notation — return as-is."""
         return import_str
+
+
+def _compute_python_complexity(func_node):
+    """Compute cyclomatic complexity for a Python function AST node.
+
+    Counts: if, for, while, and, or, except, match/case. Base = 1.
+    STORY-slim-089 R3.
+    """
+    count = 1  # base complexity
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.If):
+            count += 1
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            count += 1
+        elif isinstance(node, (ast.While,)):
+            count += 1
+        elif isinstance(node, ast.BoolOp):
+            # Each 'and'/'or' adds one per operator (n values = n-1 operators)
+            count += len(node.values) - 1
+        elif isinstance(node, ast.ExceptHandler):
+            count += 1
+        elif isinstance(node, ast.IfExp):  # ternary: x if cond else y
+            count += 1
+        # Python 3.10+ match/case
+        elif hasattr(ast, 'Match') and isinstance(node, ast.Match):
+            pass  # The match itself doesn't add; each case does
+        elif hasattr(ast, 'match_case') and isinstance(node, ast.match_case):
+            count += 1
+    return count
 
 
 _BUILTIN_CALLEES = {
@@ -387,13 +527,18 @@ class GoAnalyzer(TreeSitterAnalyzer):
         except Exception:
             return []
 
-    def extract_functions_and_calls(self, file_path):
+    def extract_functions_and_calls(self, file_path, include_complexity=False):
         try:
             source = file_path.read_bytes()
             tree = self._parser.parse(source)
-            return self._extract_funcs_and_calls(tree, file_path.stem)
+            result = self._extract_funcs_and_calls(tree, file_path.stem)
+            if include_complexity:
+                func_registry, call_edges = result
+                complexity_map = self._compute_complexity(tree)
+                return func_registry, call_edges, complexity_map
+            return result
         except Exception:
-            return {}, {}
+            return ({}, {}, {}) if include_complexity else ({}, {})
 
     def _extract_calls_from_body(self, body_node):
         calls = []
@@ -725,13 +870,18 @@ class TSAnalyzer(TreeSitterAnalyzer):
         except Exception:
             return []
 
-    def extract_functions_and_calls(self, file_path):
+    def extract_functions_and_calls(self, file_path, include_complexity=False):
         try:
             source = file_path.read_bytes()
             tree = self._parser.parse(source)
-            return self._extract_funcs_and_calls(tree, file_path.stem)
+            result = self._extract_funcs_and_calls(tree, file_path.stem)
+            if include_complexity:
+                func_registry, call_edges = result
+                complexity_map = self._compute_complexity(tree)
+                return func_registry, call_edges, complexity_map
+            return result
         except Exception:
-            return {}, {}
+            return ({}, {}, {}) if include_complexity else ({}, {})
 
     def _extract_calls_from_body(self, body_node):
         calls = []
@@ -1066,13 +1216,18 @@ class JavaAnalyzer(TreeSitterAnalyzer):
         except Exception:
             return []
 
-    def extract_functions_and_calls(self, file_path):
+    def extract_functions_and_calls(self, file_path, include_complexity=False):
         try:
             source = file_path.read_bytes()
             tree = self._parser.parse(source)
-            return self._extract_funcs_and_calls(tree, file_path.stem)
+            result = self._extract_funcs_and_calls(tree, file_path.stem)
+            if include_complexity:
+                func_registry, call_edges = result
+                complexity_map = self._compute_complexity(tree)
+                return func_registry, call_edges, complexity_map
+            return result
         except Exception:
-            return {}, {}
+            return ({}, {}, {}) if include_complexity else ({}, {})
 
     def _extract_calls_from_body(self, body_node):
         calls = []
@@ -1508,7 +1663,7 @@ def _detect_modules(root, scan_excludes=None):
     Returns list of (module_name, module_dir, stack) tuples.
     STORY-slim-081 R1.
     """
-    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
+    excludes = (SCAN_EXCLUDES | set(scan_excludes)) if scan_excludes is not None else SCAN_EXCLUDES
     marker_to_stack = {m: s for m, s in _STACK_MARKERS}
     marker_names = set(marker_to_stack.keys())
     modules = []
@@ -1548,7 +1703,7 @@ def _build_module_graph(root, modules, scan_excludes=None):
     if not modules:
         return None, 'graph TD\n'
 
-    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
+    excludes = (SCAN_EXCLUDES | set(scan_excludes)) if scan_excludes is not None else SCAN_EXCLUDES
 
     # Phase 1: Scan each module's files, collect imports, and build a
     # key→module_name index so imports can be resolved to target modules.
@@ -1653,7 +1808,7 @@ def _build_module_graph(root, modules, scan_excludes=None):
 
 def _scan_files(root, scan_excludes=None, file_ext='.py', focus=None, analyzer=None):
     import sys as _sys
-    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
+    excludes = (SCAN_EXCLUDES | set(scan_excludes)) if scan_excludes is not None else SCAN_EXCLUDES
     all_files = []
     module_index = {}
     file_to_node = {}
@@ -1734,7 +1889,7 @@ def _select_analyzers(stacks):
 
 
 # --- MODE: FILE (v1.3.0) ---
-def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=0, max_nodes=0, analyzer=None, analyzer_file_groups=None):
+def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=0, max_nodes=0, analyzer=None, analyzer_file_groups=None, show_layers=False):
     # STORY-slim-078: Build file→analyzer mapping for multi-stack dispatch
     file_analyzer_map = {}
     if analyzer_file_groups:
@@ -1872,6 +2027,46 @@ def _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=
                 final_lines = filtered
 
         dest = root / 'docs/architecture/graphs/code_graph.mmd'
+
+    # STORY-slim-089 R6: Layer violation Mermaid annotation
+    if show_layers:
+        layer_config = _load_layer_config(root)
+        # Build node_id → rel_path reverse map
+        node_to_file = {nid: f for f, nid in file_to_node.items()}
+        # Classify each node
+        node_layers = {}
+        for nid, f in node_to_file.items():
+            rel = str(f.relative_to(root))
+            name, idx = _classify_file(rel, layer_config)
+            node_layers[nid] = (name, idx)
+        # Find violation edges and add red styling
+        violation_edge_ids = []
+        edge_counter = 0
+        for line in final_lines:
+            if '-->' in line and 'subgraph' not in line:
+                parts = line.strip().split('-->')
+                if len(parts) == 2:
+                    src_id = parts[0].strip()
+                    dst_id = parts[1].strip()
+                    src_layer, src_idx = node_layers.get(src_id, ('unclassified', -1))
+                    dst_layer, dst_idx = node_layers.get(dst_id, ('unclassified', -1))
+                    if src_idx != -1 and dst_idx != -1 and src_idx > dst_idx:
+                        violation_edge_ids.append(edge_counter)
+                edge_counter += 1
+        # Apply red link styles for violations
+        for vid in violation_edge_ids:
+            final_lines.append(f'    linkStyle {vid} stroke:red,stroke-width:2px')
+        # Add legend subgraph
+        if layer_config:
+            final_lines.append('    subgraph "Layer Model (top=highest)"')
+            for i, layer in enumerate(layer_config):
+                lid = f'_legend_{i}'
+                final_lines.append(f'        {lid}["{layer["name"]}"]')
+            for i in range(len(layer_config) - 1):
+                final_lines.append(f'        _legend_{i} --> _legend_{i + 1}')
+            final_lines.append('    end')
+            final_lines.append('    style _legend_0 fill:#e6f3ff,stroke:#2980b9')
+
     return dest, nl().join(final_lines)
 
 # --- MODE: CLASS (classDiagram) ---
@@ -1986,14 +2181,25 @@ def _build_call_graph(root, all_files, focus, entry, analyzer=None):
         relevant = set()
         rel_edges = []
 
+        # STORY-slim-095 R1: Fix focus filter — use path prefix matching
+        # focus is a directory path (str); func_registry values are file paths
+        focus_prefix = (str(focus).rstrip('/') + '/') if focus else None
+
         for caller, callees in call_edges.items():
-            if focus and focus not in func_registry.get(caller, ''): continue
+            if focus_prefix:
+                caller_file = str(func_registry.get(caller, ''))
+                if not caller_file.startswith(focus_prefix) and focus_prefix.rstrip('/') != caller_file:
+                    continue
             for callee in callees:
                 resolved = _resolve_callee(callee, all_func_names, suffix_index)
                 if resolved:
                     relevant.add(caller)
                     relevant.add(resolved)
                     rel_edges.append((caller, resolved))
+
+        # STORY-slim-095 R1: Diagnostic when focus produces 0 results
+        if focus and not relevant:
+            lines.append(f'    _diag["0 functions matched focus: {_mermaid_escape(str(focus))}"]')
 
         for fn in sorted(relevant): lines.append(f'    {safe(fn)}["{_mermaid_escape(fn)}"]')
         for src, dst in rel_edges: lines.append(f'    {safe(src)} --> {safe(dst)}')
@@ -2253,7 +2459,7 @@ def impact(target='.', entry=None):
 
 
 # --- MAIN VISUALIZE (v1.3.0 Multi-Mode) ---
-def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False, lazy=False, split=False):
+def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_nodes=0, reverse=False, lazy=False, split=False, show_layers=False):
     root = Path(target).resolve()
 
     # --- Unified mode (STORY-slim-049) ---
@@ -2307,6 +2513,7 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
 
     # --- STORY-slim-081 R4: Scoped focus — resolve module name to directory ---
     scan_root = root
+    focus_via_fallback = False  # True when resolved via subdirectory fallback, not mod_map
     if focus and mode in ('file', 'class', 'call'):
         modules = _detect_modules(root, scan_excludes=scan_excludes)
         mod_map = {m[0]: m for m in modules}
@@ -2315,10 +2522,48 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
             scan_root = mod_dir
             focus = None  # Clear focus so _scan_files scans all files within module dir
         elif modules:
-            # focus didn't match a module — check if it's a partial match or suggest
-            available = sorted(m[0] for m in modules if m[0] != '.')
-            if available:
-                return f'❌ Module \'{focus}\' not found. Available modules: {", ".join(available)}'
+            # STORY-slim-095 R1: Fallback — resolve focus as subdirectory within a module
+            resolved_focus = False
+            for _mn, mod_dir, mod_stack in modules:
+                # Check if focus matches a subdirectory or package name within the module
+                candidate = mod_dir / focus
+                if candidate.is_dir():
+                    scan_root = candidate
+                    focus = None  # Resolved to directory — clear focus
+                    focus_via_fallback = True
+                    resolved_focus = True
+                    break
+                # Use LANG_PROFILES source_dirs for the detected stack
+                from pactkit.prompts.workflows import LANG_PROFILES
+                source_dirs = LANG_PROFILES.get(mod_stack, {}).get('source_dirs', [])
+                for sd in source_dirs:
+                    candidate = mod_dir / sd / focus
+                    if candidate.is_dir():
+                        scan_root = candidate
+                        focus = None  # Resolved to directory — clear focus
+                        focus_via_fallback = True
+                        resolved_focus = True
+                        break
+                if resolved_focus:
+                    break
+            if not resolved_focus:
+                # Single root module fallback: use root as scan_root, pass focus as-is
+                if len(modules) == 1 and modules[0][0] == '.':
+                    scan_root = modules[0][1]
+                    focus = None  # Scan entire project
+                    focus_via_fallback = True
+                else:
+                    available = sorted(
+                        (f'{m[0]} (project root)' if m[0] == '.' else m[0])
+                        for m in modules
+                    )
+                    if available:
+                        return (
+                            f'❌ Module \'{focus}\' not found.\n'
+                            f'Available modules: {", ".join(available)}\n'
+                            f'Hint: use an exact module name from the list above, '
+                            f'or omit --focus to scan the entire project.'
+                        )
 
     # STORY-slim-076: Multi-stack scanning
     stacks = _detect_stacks(scan_root)
@@ -2378,8 +2623,21 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
         else:
             dest, content = _build_call_graph(root, all_files, focus, entry, analyzer=analyzer)
     else:
-        dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes, analyzer=analyzer, analyzer_file_groups=analyzer_file_groups)
+        dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes, analyzer=analyzer, analyzer_file_groups=analyzer_file_groups, show_layers=show_layers)
         if dest is None: return content  # error message
+
+    # STORY-slim-095: When focus was resolved via subdirectory fallback, dest lacks focus_ prefix.
+    # Only applies to fallback resolution, not direct mod_map match (STORY-slim-081 behavior).
+    if focus_via_fallback and not focus:
+        prefix_map = {
+            'call_graph.mmd': 'focus_call_graph.mmd',
+            'class_graph.mmd': 'focus_class_graph.mmd',
+            'code_graph.mmd': 'focus_file_graph.mmd',
+        }
+        for base, focus_name in prefix_map.items():
+            if dest.name == base:
+                dest = dest.with_name(focus_name)
+                break
 
     if not dest.parent.exists(): dest.parent.mkdir(parents=True, exist_ok=True)
     _atomic_mmd_write(dest, content)
@@ -3587,9 +3845,19 @@ def _parse_commands(commands_dir, graph: WorkflowGraph):
 
 
 def _parse_routing_table(rules_dir, graph: WorkflowGraph):
-    """Parse rules/04-routing-table.md to extract command→agent→playbook mappings (R3)."""
-    rt_path = rules_dir / '04-routing-table.md' if rules_dir.is_dir() else None
-    if not rt_path or not rt_path.exists():
+    """Parse rules/pactkit.md (or legacy 04-routing-table.md) for command→agent→playbook mappings (R3)."""
+    rt_path = None
+    if rules_dir.is_dir():
+        # New layout: merged into pactkit.md
+        candidate = rules_dir / 'pactkit.md'
+        if candidate.exists():
+            rt_path = candidate
+        else:
+            # Legacy fallback
+            candidate = rules_dir / '04-routing-table.md'
+            if candidate.exists():
+                rt_path = candidate
+    if not rt_path:
         return
     content = rt_path.read_text(encoding='utf-8')
     # Pattern: ### Name (`/project-xxx`) \n - **Role**: Agent Role \n - **Playbook**: `path`
@@ -3943,6 +4211,377 @@ def export_focus_graphs(graph: WorkflowGraph, output_dir) -> list:
     return written
 
 
+# --- STORY-slim-089: Enterprise Code Analysis ---
+
+# Layer model defaults (R5)
+_DEFAULT_LAYERS = [
+    {'name': 'ui', 'patterns': ['*/ui/*', '*/views/*', '*/pages/*', '*/components/*']},
+    {'name': 'services', 'patterns': ['*/service/*', '*/services/*', '*/api/*']},
+    {'name': 'data', 'patterns': ['*/data/*', '*/models/*', '*/db/*', '*/repositories/*']},
+    {'name': 'config', 'patterns': ['*/config/*', '*/settings/*']},
+    {'name': 'utils', 'patterns': ['*/util/*', '*/utils/*', '*/helpers/*', '*/lib/*']},
+]
+
+_COMPLEXITY_THRESHOLDS = [(30, 'critical'), (20, 'high'), (10, 'medium'), (0, 'low')]
+
+
+def _classify_complexity(score):
+    for threshold, label in _COMPLEXITY_THRESHOLDS:
+        if score > threshold:
+            return label
+    return 'low'
+
+
+def _load_layer_config(root):
+    """Load layer configuration from pactkit.yaml or return default."""
+    candidates = [
+        root / '.claude' / 'pactkit.yaml',
+        root / '.opencode' / 'pactkit.yaml',
+        root / '.codex' / 'pactkit.yaml',
+    ]
+    for path in candidates:
+        if path.exists():
+            try:
+                import yaml as _yaml
+                data = _yaml.safe_load(path.read_text(encoding='utf-8'))
+                if isinstance(data, dict):
+                    viz = data.get('visualize', {})
+                    if isinstance(viz, dict) and 'layers' in viz:
+                        layers = viz['layers']
+                        if isinstance(layers, list) and layers:
+                            return layers
+            except Exception:
+                pass
+    return _DEFAULT_LAYERS
+
+
+def _classify_file(rel_path_str, layers):
+    """Classify a file into an architectural layer by matching patterns.
+
+    Returns (layer_name, layer_index) or ('unclassified', -1).
+    """
+    from fnmatch import fnmatch
+    for idx, layer in enumerate(layers):
+        for pattern in layer.get('patterns', []):
+            if fnmatch(rel_path_str, pattern):
+                return layer['name'], idx
+    return 'unclassified', -1
+
+
+def blast_radius(target='.', target_file=None, entry=None, depth=0):
+    """Compute blast radius — all files/functions affected by a change.
+
+    STORY-slim-089 R1 (file-level) and R2 (function-level).
+    """
+    import json as _json
+    root = Path(target).resolve()
+    scan_excludes = _load_scan_excludes(root)
+    stacks = _detect_stacks(root)
+
+    if entry:
+        # R2: Function-level blast radius
+        all_files = []
+        for stk in stacks:
+            exts = [_LANG_FILE_EXT.get(stk, '.py')]
+            if stk == 'node':
+                exts.extend(['.js', '.tsx', '.jsx'])
+            for ext in exts:
+                files, mi, ftn = _scan_files(root, scan_excludes=scan_excludes, file_ext=ext)
+                all_files.extend(files)
+        analyzer = _select_analyzer(stacks[0])
+        func_registry, call_edges = _scan_call_edges(root, all_files, analyzer=analyzer)
+
+        all_func_names = set(func_registry.keys())
+        suffix_index = _build_suffix_index(all_func_names)
+
+        # Build forward adjacency: caller → callees
+        forward_map = {}
+        reverse_map = {}
+        for caller, callees in call_edges.items():
+            for callee in callees:
+                resolved = _resolve_callee(callee, all_func_names, suffix_index)
+                if resolved:
+                    forward_map.setdefault(caller, []).append(resolved)
+                    reverse_map.setdefault(resolved, []).append(caller)
+
+        start = _find_entry_func(entry, all_func_names)
+        if not start:
+            return _json.dumps({'entry': entry, 'affected_functions': [], 'affected_files': [], 'depth': 0, 'total_count': 0})
+
+        # Bidirectional BFS
+        visited = set()
+        queue = deque([(start, 0)])
+        max_depth_reached = 0
+        while queue:
+            current, d = queue.popleft()
+            if current in visited:
+                continue
+            if depth > 0 and d > depth:
+                continue
+            visited.add(current)
+            max_depth_reached = max(max_depth_reached, d)
+            for neighbor in forward_map.get(current, []) + reverse_map.get(current, []):
+                if neighbor not in visited:
+                    queue.append((neighbor, d + 1))
+
+        visited.discard(start)
+        affected_files = sorted({func_registry[f] for f in visited if f in func_registry})
+        return _json.dumps({
+            'entry': entry,
+            'affected_functions': sorted(visited),
+            'affected_files': affected_files,
+            'depth': max_depth_reached,
+            'total_count': len(visited),
+        })
+
+    # R1: File-level blast radius
+    if not target_file:
+        return _json.dumps({'error': 'Either --target or --entry is required'})
+
+    all_files = []
+    module_index = {}
+    file_to_node = {}
+    analyzer_file_groups = []
+    for stk in stacks:
+        stk_analyzer = _select_analyzer(stk)
+        exts = [_LANG_FILE_EXT.get(stk, '.py')]
+        if stk == 'node':
+            exts.extend(['.js', '.tsx', '.jsx'])
+        stk_files = []
+        for ext in exts:
+            files, mi, ftn = _scan_files(root, scan_excludes=scan_excludes, file_ext=ext, analyzer=stk_analyzer)
+            stk_files.extend(files)
+            module_index.update(mi)
+            file_to_node.update(ftn)
+        all_files.extend(stk_files)
+        analyzer_file_groups.append((stk, stk_analyzer, stk_files))
+    analyzer = analyzer_file_groups[0][1] if analyzer_file_groups else PythonAnalyzer()
+
+    # Build edges via _build_file_graph internal logic (extract edges only)
+    file_analyzer_map = {}
+    if analyzer_file_groups:
+        for _stk, a, files in analyzer_file_groups:
+            for f in files:
+                file_analyzer_map[f] = a
+
+    forward_adj = {}  # file → files it imports
+    reverse_adj = {}  # file → files that import it
+    for p in all_files:
+        a = file_analyzer_map.get(p, analyzer)
+        for imported_module in a.extract_imports(p):
+            normalized = a.normalize_import(imported_module, p, root) if hasattr(a, 'normalize_import') else imported_module
+            if normalized is None:
+                continue
+            candidates = module_index.get(normalized, [])
+            if not candidates:
+                parts = normalized.split('.')
+                for i in range(len(parts), 0, -1):
+                    sub = '.'.join(parts[:i])
+                    if sub in module_index:
+                        candidates = module_index[sub]
+                        break
+            if not candidates:
+                parts = normalized.split('/')
+                for i in range(len(parts), 0, -1):
+                    sub = '/'.join(parts[:i])
+                    if sub in module_index:
+                        candidates = module_index[sub]
+                        break
+            tf = _best_match(candidates, p) if len(candidates) > 1 else (candidates[0] if candidates else None)
+            if tf and tf != p:
+                forward_adj.setdefault(p, set()).add(tf)
+                reverse_adj.setdefault(tf, set()).add(p)
+
+    # Find the target file
+    target_path = root / target_file
+    if not target_path.exists():
+        # Try fuzzy match
+        for f in all_files:
+            rel = str(f.relative_to(root))
+            if rel == target_file or rel.endswith('/' + target_file) or f.name == target_file:
+                target_path = f
+                break
+    if target_path not in file_to_node:
+        return _json.dumps({'target': target_file, 'affected_files': [], 'depth': 0, 'total_count': 0})
+
+    # Bidirectional BFS on file graph
+    visited = set()
+    queue = deque([(target_path, 0)])
+    max_depth_reached = 0
+    while queue:
+        current, d = queue.popleft()
+        if current in visited:
+            continue
+        if depth > 0 and d > depth:
+            continue
+        visited.add(current)
+        max_depth_reached = max(max_depth_reached, d)
+        neighbors = set()
+        neighbors.update(forward_adj.get(current, set()))
+        neighbors.update(reverse_adj.get(current, set()))
+        for neighbor in neighbors:
+            if neighbor not in visited:
+                queue.append((neighbor, d + 1))
+
+    visited.discard(target_path)
+    affected = sorted(str(f.relative_to(root)) for f in visited)
+    return _json.dumps({
+        'target': target_file,
+        'affected_files': affected,
+        'depth': max_depth_reached,
+        'total_count': len(affected),
+    })
+
+
+def complexity(target='.', threshold=0, fmt='table', show_all=False):
+    """Scan all source files and report cyclomatic complexity.
+
+    STORY-slim-089 R4.
+    """
+    import json as _json
+    root = Path(target).resolve()
+    scan_excludes = _load_scan_excludes(root)
+    stacks = _detect_stacks(root)
+
+    all_entries = []
+    for stk in stacks:
+        stk_analyzer = _select_analyzer(stk)
+        exts = [_LANG_FILE_EXT.get(stk, '.py')]
+        if stk == 'node':
+            exts.extend(['.js', '.tsx', '.jsx'])
+        for ext in exts:
+            files, _mi, _ftn = _scan_files(root, scan_excludes=scan_excludes, file_ext=ext)
+            for f in files:
+                result = stk_analyzer.extract_functions_and_calls(f, include_complexity=True)
+                if len(result) == 3:
+                    _fr, _ce, cm = result
+                    for func_name, score in cm.items():
+                        if threshold > 0 and score < threshold:
+                            continue
+                        rel_file = str(f.relative_to(root))
+                        all_entries.append({
+                            'function': func_name,
+                            'file': rel_file,
+                            'complexity': score,
+                            'classification': _classify_complexity(score),
+                        })
+
+    # Sort descending by complexity
+    all_entries.sort(key=lambda e: e['complexity'], reverse=True)
+
+    if not show_all:
+        all_entries = all_entries[:20]
+
+    if fmt == 'json':
+        return _json.dumps(all_entries, indent=2)
+
+    # Table format
+    if not all_entries:
+        return 'No functions found.'
+    lines = [f'{"Function":<50} {"File":<40} {"Complexity":>10} {"Level":<10}']
+    lines.append('-' * 112)
+    for e in all_entries:
+        lines.append(f'{e["function"]:<50} {e["file"]:<40} {e["complexity"]:>10} {e["classification"]:<10}')
+    return nl().join(lines)
+
+
+def layers(target='.'):
+    """Detect architectural layer violations.
+
+    STORY-slim-089 R5.
+    """
+    import json as _json
+    root = Path(target).resolve()
+    scan_excludes = _load_scan_excludes(root)
+    layer_config = _load_layer_config(root)
+    stacks = _detect_stacks(root)
+
+    all_files = []
+    module_index = {}
+    file_to_node = {}
+    analyzer_file_groups = []
+    for stk in stacks:
+        stk_analyzer = _select_analyzer(stk)
+        exts = [_LANG_FILE_EXT.get(stk, '.py')]
+        if stk == 'node':
+            exts.extend(['.js', '.tsx', '.jsx'])
+        stk_files = []
+        for ext in exts:
+            files, mi, ftn = _scan_files(root, scan_excludes=scan_excludes, file_ext=ext, analyzer=stk_analyzer)
+            stk_files.extend(files)
+            module_index.update(mi)
+            file_to_node.update(ftn)
+        all_files.extend(stk_files)
+        analyzer_file_groups.append((stk, stk_analyzer, stk_files))
+    analyzer = analyzer_file_groups[0][1] if analyzer_file_groups else PythonAnalyzer()
+
+    file_analyzer_map = {}
+    if analyzer_file_groups:
+        for _stk, a, files in analyzer_file_groups:
+            for f in files:
+                file_analyzer_map[f] = a
+
+    # Build edges
+    edges = []
+    for p in all_files:
+        a = file_analyzer_map.get(p, analyzer)
+        for imported_module in a.extract_imports(p):
+            normalized = a.normalize_import(imported_module, p, root) if hasattr(a, 'normalize_import') else imported_module
+            if normalized is None:
+                continue
+            candidates = module_index.get(normalized, [])
+            if not candidates:
+                parts = normalized.split('.')
+                for i in range(len(parts), 0, -1):
+                    sub = '.'.join(parts[:i])
+                    if sub in module_index:
+                        candidates = module_index[sub]
+                        break
+            if not candidates:
+                parts = normalized.split('/')
+                for i in range(len(parts), 0, -1):
+                    sub = '/'.join(parts[:i])
+                    if sub in module_index:
+                        candidates = module_index[sub]
+                        break
+            tf = _best_match(candidates, p) if len(candidates) > 1 else (candidates[0] if candidates else None)
+            if tf and tf != p:
+                edges.append((p, tf))
+
+    # Classify files and detect violations
+    violations = []
+    layer_summary = {}
+    file_layers = {}  # cache
+    for f in all_files:
+        rel = str(f.relative_to(root))
+        name, idx = _classify_file(rel, layer_config)
+        file_layers[f] = (name, idx)
+        if name != 'unclassified':
+            layer_summary[name] = layer_summary.get(name, 0) + 1
+
+    for importer, importee in edges:
+        imp_layer, imp_idx = file_layers.get(importer, ('unclassified', -1))
+        tgt_layer, tgt_idx = file_layers.get(importee, ('unclassified', -1))
+        if imp_idx == -1 or tgt_idx == -1:
+            continue  # Skip unclassified files
+        if imp_idx == tgt_idx:
+            continue  # Same layer — OK
+        if imp_idx > tgt_idx:
+            # Lower layer importing higher layer = violation
+            violations.append({
+                'importer': str(importer.relative_to(root)),
+                'importee': str(importee.relative_to(root)),
+                'importer_layer': imp_layer,
+                'importee_layer': tgt_layer,
+            })
+
+    return _json.dumps({
+        'violations': violations,
+        'total_count': len(violations),
+        'layer_summary': layer_summary,
+    }, indent=2)
+
+
 # --- CLI ---
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -3958,11 +4597,27 @@ if __name__ == '__main__':
     p_viz.add_argument('--reverse', action='store_true', default=False, help='Reverse BFS: find callers of entry function (STORY-053)')
     p_viz.add_argument('--lazy', action='store_true', default=False, help='Skip regeneration if graph is up-to-date')
     p_viz.add_argument('--split', action='store_true', default=False, help='Generate per-entry-point focus graphs (unified mode only)')
+    p_viz.add_argument('--layers', action='store_true', default=False, help='Annotate file graph with layer violations (STORY-slim-089 R6)')
     p_impact = sub.add_parser('impact', help='Find test files impacted by a changed function (STORY-053)')
     p_impact.add_argument('--entry', required=True, help='Changed function name')
 
+    p_blast = sub.add_parser('blast_radius', help='Compute blast radius for a file or function (STORY-slim-089)')
+    p_blast.add_argument('--target', help='Target file path (relative to project root)')
+    p_blast.add_argument('--entry', help='Target function name (for function-level analysis)')
+    p_blast.add_argument('--depth', type=int, default=0, help='Limit BFS hops (0=unlimited)')
+
+    p_cx = sub.add_parser('complexity', help='Report cyclomatic complexity (STORY-slim-089)')
+    p_cx.add_argument('--threshold', type=int, default=0, help='Only show functions with complexity >= N')
+    p_cx.add_argument('--format', dest='fmt', choices=['table', 'json'], default='table')
+    p_cx.add_argument('--all', dest='show_all', action='store_true', default=False, help='Show all (not just top 20)')
+
+    p_layers = sub.add_parser('layers', help='Detect architectural layer violations (STORY-slim-089)')
+
     a = parser.parse_args()
     if a.cmd == 'init_arch': print(init_architecture())
-    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse, lazy=a.lazy, split=a.split))
+    elif a.cmd == 'visualize': print(visualize('.', a.focus, a.mode, a.entry, depth=a.depth, max_nodes=a.max_nodes, reverse=a.reverse, lazy=a.lazy, split=a.split, show_layers=a.layers))
     elif a.cmd == 'impact': print(impact('.', a.entry))
+    elif a.cmd == 'blast_radius': print(blast_radius('.', target_file=a.target, entry=a.entry, depth=a.depth))
+    elif a.cmd == 'complexity': print(complexity('.', threshold=a.threshold, fmt=a.fmt, show_all=a.show_all))
+    elif a.cmd == 'layers': print(layers('.'))
     elif a.cmd == 'list_rules': print(list_rules())
