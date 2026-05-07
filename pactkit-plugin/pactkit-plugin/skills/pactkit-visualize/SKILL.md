@@ -27,7 +27,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py visu
 | `--mode call` | Function-level call graph | - |
 | `--mode module` | Module-level dependency graph with weighted cross-module edges | - |
 | `--entry <func>` | BFS transitive chain tracing from specified function (requires `--mode call`) | - |
-| `--focus <module>` | Scope scan to a specific module directory. **MUST** be an exact module name from the project (e.g., `pactkit`, `app`), not a keyword or concept. Run without `--focus` first to see available modules. | - |
+| `--focus <module>` | Scope scan to a specific module directory (works with file, class, call modes) | - |
 
 ### init_arch -- Initialize architecture directory
 ```

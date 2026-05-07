@@ -25,17 +25,6 @@ Deep code analysis and execution path tracing via static analysis.
 - Follow call chain file by file, recording data transformations.
 - Note how data structures change (e.g., `dict` -> `UserObj` -> `JSON`).
 
-#### Layered Output: Interface Summary vs Full Implementation
-
-| Module Role | Output Level | How |
-|-------------|-------------|-----|
-| Target (to be modified) | Full implementation | `Read <file>` |
-| Related (dependency, not modified) | Interface summary | `pactkit interface-summary <file>` |
-
-For related (non-target) modules, run `pactkit interface-summary <file>` instead of reading full source. This CLI command uses AST parsing to output only signatures + types + docstrings — function bodies are excluded by code, not by prompt instruction.
-
-If `pactkit` is not on `$PATH`, use `python3 -m pactkit interface-summary <file>`.
-
 ### 4. Visual Synthesis
 Output a **Mermaid Sequence Diagram** to visualize the flow.
 

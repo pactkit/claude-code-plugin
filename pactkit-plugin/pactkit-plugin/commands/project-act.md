@@ -45,16 +45,11 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 1.  **Targeted Visual Scan**: Run `visualize --focus <module>` only (single targeted mode). For large codebases, add `--depth 2`. Do NOT run full 3-mode visualize here — that is handled by Phase 4 Lazy Visualize after implementation.
 2.  **Trace Verification** — use pactkit-trace skill:
     - Before touching any code, confirm the call site and ensure you don't break existing callers.
-3.  **Interface Summary (Code Enforce)** — for non-target modules discovered by trace:
-    - Run `pactkit interface-summary <file>` for each related module you do NOT plan to modify.
-    - This outputs signatures + types + docstrings only (function bodies excluded by code).
-    - Only escalate to full `Read <file>` when you confirm the module needs modification.
-    - If `pactkit` is not on `$PATH`, use `python3 -m pactkit interface-summary <file>`.
-4.  **Topology-Aware Trace (Conditional)** — if `detect_topology(root)` includes `api_call` or `agent`:
+3.  **Topology-Aware Trace (Conditional)** — if `detect_topology(root)` includes `api_call` or `agent`:
     - For **api_call**: Run `api_convention_summary(root)` to check API path prefixes and fetch function conventions. Use these conventions when writing new API calls to maintain consistency.
     - For **agent**: Check AgentParser output for orchestration edges so new code doesn't break agent flow.
-5.  **Solution Design Protocol (Conditional)** — if the implementation involves frameworks already used by the project:
-    - Execute the **Solution Design Protocol** from `06-solution-design.md` to evaluate capability delta before writing code.
+4.  **Solution Design Protocol (Conditional)** — if the implementation involves frameworks already used by the project:
+    - Execute the **Solution Design Protocol** from `12-solution-design.md` to evaluate capability delta before writing code.
     - Output brief capability assessment before proceeding to Phase 2.
 
 ## 🎬 Phase 2: Test Scaffolding (TDD)
@@ -84,15 +79,6 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 ## 🎬 Phase 4: Sync & Document
 1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed).
-1b. **Journey Sync (Conditional)**:
-    - **Skip if**: `docs/e2e/journey.md` does not exist in the project.
-    - **Skip if**: Current Story's Spec has no `## Journey Segment` section.
-    - **If triggered**:
-      1. Read `docs/e2e/journey.md`
-      2. Locate the journey step(s) referenced in the Spec's `## Journey Segment` (format: `- Journey: {Name}` / `- Steps: {N}` / `- Impact: {desc}`)
-      3. Review: do the step assertions still hold after this Story's code changes?
-      4. If outdated: Edit the affected step(s) in journey.md — update assertions, add new structure assertions, or adjust step description. MUST use Edit (incremental), MUST NOT use Write (full replace).
-      5. If still accurate: skip with log "Journey steps verified — no update needed"
 2.  **Update Board (CRITICAL)**: Run `{BOARD_CMD} update_task {STORY_ID} "Task Name"` for each completed task to mark it as `[x]`.
 3.  **Update Continuation State**: Run `pactkit context --continuation --last-command "/project-act {STORY_ID}" --phase "Phase 4: complete"` to record the agent's stopping point for session handoff.
 4.  **Coverage Table Output (STORY-slim-105)**: Output a coverage table listing each R{N} from the Spec:
