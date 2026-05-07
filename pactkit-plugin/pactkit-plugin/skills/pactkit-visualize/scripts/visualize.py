@@ -1663,7 +1663,7 @@ def _detect_modules(root, scan_excludes=None):
     Returns list of (module_name, module_dir, stack) tuples.
     STORY-slim-081 R1.
     """
-    excludes = (SCAN_EXCLUDES | set(scan_excludes)) if scan_excludes is not None else SCAN_EXCLUDES
+    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
     marker_to_stack = {m: s for m, s in _STACK_MARKERS}
     marker_names = set(marker_to_stack.keys())
     modules = []
@@ -1703,7 +1703,7 @@ def _build_module_graph(root, modules, scan_excludes=None):
     if not modules:
         return None, 'graph TD\n'
 
-    excludes = (SCAN_EXCLUDES | set(scan_excludes)) if scan_excludes is not None else SCAN_EXCLUDES
+    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
 
     # Phase 1: Scan each module's files, collect imports, and build a
     # key→module_name index so imports can be resolved to target modules.
@@ -1808,7 +1808,7 @@ def _build_module_graph(root, modules, scan_excludes=None):
 
 def _scan_files(root, scan_excludes=None, file_ext='.py', focus=None, analyzer=None):
     import sys as _sys
-    excludes = (SCAN_EXCLUDES | set(scan_excludes)) if scan_excludes is not None else SCAN_EXCLUDES
+    excludes = set(scan_excludes) if scan_excludes is not None else SCAN_EXCLUDES
     all_files = []
     module_index = {}
     file_to_node = {}
@@ -2553,17 +2553,9 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
                     focus = None  # Scan entire project
                     focus_via_fallback = True
                 else:
-                    available = sorted(
-                        (f'{m[0]} (project root)' if m[0] == '.' else m[0])
-                        for m in modules
-                    )
+                    available = sorted(m[0] for m in modules if m[0] != '.')
                     if available:
-                        return (
-                            f'❌ Module \'{focus}\' not found.\n'
-                            f'Available modules: {", ".join(available)}\n'
-                            f'Hint: use an exact module name from the list above, '
-                            f'or omit --focus to scan the entire project.'
-                        )
+                        return f'❌ Module \'{focus}\' not found. Available modules: {", ".join(available)}'
 
     # STORY-slim-076: Multi-stack scanning
     stacks = _detect_stacks(scan_root)
@@ -3845,19 +3837,9 @@ def _parse_commands(commands_dir, graph: WorkflowGraph):
 
 
 def _parse_routing_table(rules_dir, graph: WorkflowGraph):
-    """Parse rules/pactkit.md (or legacy 04-routing-table.md) for command→agent→playbook mappings (R3)."""
-    rt_path = None
-    if rules_dir.is_dir():
-        # New layout: merged into pactkit.md
-        candidate = rules_dir / 'pactkit.md'
-        if candidate.exists():
-            rt_path = candidate
-        else:
-            # Legacy fallback
-            candidate = rules_dir / '04-routing-table.md'
-            if candidate.exists():
-                rt_path = candidate
-    if not rt_path:
+    """Parse rules/04-routing-table.md to extract command→agent→playbook mappings (R3)."""
+    rt_path = rules_dir / '04-routing-table.md' if rules_dir.is_dir() else None
+    if not rt_path or not rt_path.exists():
         return
     content = rt_path.read_text(encoding='utf-8')
     # Pattern: ### Name (`/project-xxx`) \n - **Role**: Agent Role \n - **Playbook**: `path`

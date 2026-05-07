@@ -88,7 +88,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - **Threshold**: If the same operation has **≥ 3 independent implementations**, the Spec's Technical Design MUST include a shared abstraction evaluation before adding the Nth implementation.
     - **Skip condition**: Pure greenfield features with no existing codebase analog — log "Lateral Scan: no existing pattern found" and proceed.
 5.  **Solution Design Protocol (Conditional)** — if the requirement involves frameworks already used by the project:
-    - Execute the **Solution Design Protocol** from `06-solution-design.md` to evaluate capability delta (framework native + project existing vs. needs implementation).
+    - Execute the **Solution Design Protocol** from `12-solution-design.md` to evaluate capability delta (framework native + project existing vs. needs implementation).
     - Include the Capability Assessment output in Phase 2 Spec writing.
 
 ## 🎬 Phase 2: Design & Impact
@@ -109,19 +109,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - Edit `(Description of the problem or feature)` → actual Background content from your Trace findings
     - Edit `## Target Call Chain` placeholder → actual call chain from Phase 1
     - Edit `### R1: (Requirement Name) (MUST)` → actual requirements using RFC 2119 keywords (MUST/SHOULD/MAY). Add more R{N} sections as needed.
-4.  **Journey Segment (Conditional)**: If `docs/e2e/journey.md` exists in the project:
-    - Read `docs/e2e/journey.md` to identify defined journeys and their steps.
-    - Assess whether this Story's scope touches any journey step (e.g., modifies a UI flow, changes an API endpoint used in a journey).
-    - If yes: add a `## Journey Segment` section to the Spec with the format:
-      ```
-      ## Journey Segment
-
-      - Journey: {Journey Name}
-      - Steps: {step numbers, e.g., "2-3" or "4"}
-      - Impact: {brief description of how this story affects the journey}
-      ```
-    - If the Story does not affect any journey: do NOT add this section (Act Phase 4 Journey Sync will auto-skip).
-5.  **Output checkpoint**: Print "Spec skeleton filled. Adding acceptance criteria."
+4.  **Output checkpoint**: Print "Spec skeleton filled. Adding acceptance criteria."
 
 ## 🎬 Phase 3.2b: Acceptance Criteria & Implementation Steps
 1.  **Edit AC** (use Edit tool): Replace `### AC1: (Scenario Name) (R1)` and its Given/When/Then placeholders with actual scenarios. The template already provides the `- **Given**` / `- **When**` / `- **Then**` structure — fill in the content. Add more AC{N} sections as needed.
