@@ -1,6 +1,7 @@
 ---
 name: pactkit-doctor
 description: "Diagnose project health status"
+model: haiku
 ---
 
 # PactKit Doctor

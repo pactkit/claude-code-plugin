@@ -1,6 +1,7 @@
 ---
 description: "QA verification: security scan, code quality scan, Spec alignment"
 allowed-tools: [Read, Bash, Grep, Glob]
+model: sonnet
 ---
 
 # Command: Check (v1.3.0 Deep QA)

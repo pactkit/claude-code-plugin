@@ -1,6 +1,7 @@
 ---
 name: pactkit-trace
 description: "Deep code tracing and execution flow analysis"
+model: sonnet
 ---
 
 # PactKit Trace
@@ -19,7 +20,7 @@ Deep code analysis and execution path tracing via static analysis.
 
 ### 2. Call Graph Analysis
 - Run `visualize --mode call --entry <function_name>` to obtain call chains.
-- Read `docs/architecture/graphs/call_graph.mmd` to see all reachable functions.
+- Query callers/callees: use `pactkit query --callers/--callees <func>` (when graph_provider: codegraph), or grep `docs/architecture/graphs/call_graph.mmd`.
 
 ### 3. Deep Tracing
 - Follow call chain file by file, recording data transformations.

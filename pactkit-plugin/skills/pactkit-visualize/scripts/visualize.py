@@ -291,22 +291,50 @@ class PythonAnalyzer(LanguageAnalyzer):
             call_edges = {}
             complexity_map = {}
             class_defs = {}
-            for node in ast.iter_child_nodes(tree):
+
+            # Build parent map for qname construction (R3: nested functions)
+            parent_map = {}
+            for node in ast.walk(tree):
+                for child in ast.iter_child_nodes(node):
+                    parent_map[id(child)] = node
+
+            def _get_qname(func_node):
+                """Construct qualified name for a function, walking up the parent chain."""
+                parts = [func_node.name]
+                p = parent_map.get(id(func_node))
+                while p is not None and not isinstance(p, ast.Module):
+                    if isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        parts.append(p.name)
+                    elif isinstance(p, ast.ClassDef):
+                        parts.append(p.name)
+                    p = parent_map.get(id(p))
+                parts.reverse()
+                return '.'.join(parts)
+
+            def _get_current_class(func_node):
+                """Return the class name if this function is a direct class method."""
+                p = parent_map.get(id(func_node))
+                if isinstance(p, ast.ClassDef):
+                    return p.name
+                return None
+
+            # R3: use ast.walk to find all FunctionDef at any depth
+            for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    qname = node.name
+                    qname = _get_qname(node)
+                    current_class = _get_current_class(node)
                     func_registry[qname] = rel
-                    call_edges[qname] = _extract_calls(node, current_class=None, source_text=source_text)
+                    call_edges[qname] = _extract_calls(node, current_class=current_class, source_text=source_text)
                     if include_complexity:
                         complexity_map[qname] = _compute_python_complexity(node)
                 elif isinstance(node, ast.ClassDef):
                     class_defs[node.name] = node
-                    for item in node.body:
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            qname = f'{node.name}.{item.name}'
-                            func_registry[qname] = rel
-                            call_edges[qname] = _extract_calls(item, current_class=node.name, source_text=source_text)
-                            if include_complexity:
-                                complexity_map[qname] = _compute_python_complexity(item)
+
+            # R2: capture module-level function references in list/tuple/assign
+            module_refs = _extract_module_refs(tree)
+            if module_refs:
+                key = '__module__'
+                call_edges.setdefault(key, []).extend(module_refs)
             # STORY-slim-068 R3: Add virtual edges for inheritance overrides
             for cls_name, cls_node in class_defs.items():
                 sub_methods = {item.name for item in cls_node.body
@@ -428,22 +456,71 @@ _BUILTIN_CALLEES = {
 
 _DISPATCH_HINT_PREFIX = '# pactkit-trace: dispatches_to '
 
+_REF_BUILTINS_EXTRA = {'None', 'True', 'False', 'self', 'cls'}
+
+
+def _is_func_ref_candidate(name: str) -> bool:
+    """Return True if a bare name looks like a function reference (not a constant)."""
+    if name in _BUILTIN_CALLEES or name in _REF_BUILTINS_EXTRA:
+        return False
+    if len(name) <= 1:
+        return False
+    if name.isupper():  # ALL_CAPS constants like MAX, TIMEOUT
+        return False
+    return True
+
+
+def _extract_module_refs(tree) -> list:
+    """Extract function references from module-level assignments and collection literals."""
+    refs = []
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            # TOOLS = [func_a, func_b] or TOOLS = (func_a,)
+            if isinstance(node.value, (ast.List, ast.Tuple)):
+                for elt in node.value.elts:
+                    if isinstance(elt, ast.Name) and _is_func_ref_candidate(elt.id):
+                        refs.append(elt.id)
+            # handler = process_event
+            elif isinstance(node.value, ast.Name) and _is_func_ref_candidate(node.value.id):
+                refs.append(node.value.id)
+    return refs
+
 
 def _extract_calls(func_node, current_class=None, source_text=None):
-    """Extract function/method calls from a function body (BUG-012: filtered)."""
+    """Extract function/method calls from a function body."""
     callees = []
     for node in ast.walk(func_node):
         if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name):
-                name = node.func.id
-                if name not in _BUILTIN_CALLEES:
-                    callees.append(name)
-            elif isinstance(node.func, ast.Attribute):
-                # self.method() → ClassName.method (retain)
-                if isinstance(node.func.value, ast.Name):
-                    if node.func.value.id == 'self' and current_class:
-                        callees.append(f'{current_class}.{node.func.attr}')
-                    # Skip non-self local variable method calls (e.g., lines.append)
+            try:
+                if isinstance(node.func, ast.Name):
+                    name = node.func.id
+                    if name not in _BUILTIN_CALLEES:
+                        callees.append(name)
+                elif isinstance(node.func, ast.Attribute):
+                    # R1: capture all obj.method() calls, not just self.method()
+                    attr = node.func.attr
+                    if attr not in _BUILTIN_CALLEES:
+                        if isinstance(node.func.value, ast.Name):
+                            if node.func.value.id == 'self' and current_class:
+                                callees.append(f'{current_class}.{attr}')
+                            else:
+                                callees.append(attr)  # bare method name; _resolve_callee handles suffix match
+                        else:
+                            callees.append(attr)  # chained calls e.g. foo().bar()
+            except AttributeError:
+                pass
+        # R2: function references in list/tuple literals and keyword arguments
+        elif isinstance(node, (ast.List, ast.Tuple)):
+            for elt in node.elts:
+                if isinstance(elt, ast.Name) and _is_func_ref_candidate(elt.id):
+                    callees.append(elt.id)
+        elif isinstance(node, ast.keyword):
+            if isinstance(node.value, ast.Name) and _is_func_ref_candidate(node.value.id):
+                callees.append(node.value.id)
+        elif isinstance(node, ast.Assign):
+            # direct assignment: handler = process_event (bare name RHS)
+            if isinstance(node.value, ast.Name) and _is_func_ref_candidate(node.value.id):
+                callees.append(node.value.id)
     # STORY-slim-068 R2: Parse dispatch hint comments from source text
     if source_text:
         try:
@@ -1546,6 +1623,8 @@ def _load_scan_excludes(root):
     return None
 
 
+
+
 def _load_stub_edges(root):
     """Load stub_edges from pactkit.yaml visualize section. Returns list of (src, dst) tuples or empty list.
 
@@ -2161,7 +2240,8 @@ def _build_call_graph(root, all_files, focus, entry, analyzer=None):
             if current in visited: continue
             visited.add(current)
             for callee in call_edges.get(current, []):
-                resolved = _resolve_callee(callee, all_func_names, suffix_index)
+                current_file = str(func_registry.get(current, ''))
+                resolved = _resolve_callee(callee, all_func_names, suffix_index, caller_file=current_file)
                 if resolved:
                     reachable_edges.append((current, resolved))
                     if resolved not in visited: queue.append(resolved)
@@ -2173,6 +2253,7 @@ def _build_call_graph(root, all_files, focus, entry, analyzer=None):
         )
         dest = root / 'docs/architecture/graphs/call_graph.mmd'
         if focus: dest = root / 'docs/architecture/graphs/focus_call_graph.mmd'
+        _atomic_mmd_write(dest, content)
         return dest, content
     else:
         # Full call graph — only edges where both endpoints are in func_registry (BUG-012)
@@ -2186,12 +2267,12 @@ def _build_call_graph(root, all_files, focus, entry, analyzer=None):
         focus_prefix = (str(focus).rstrip('/') + '/') if focus else None
 
         for caller, callees in call_edges.items():
+            caller_file = str(func_registry.get(caller, ''))
             if focus_prefix:
-                caller_file = str(func_registry.get(caller, ''))
                 if not caller_file.startswith(focus_prefix) and focus_prefix.rstrip('/') != caller_file:
                     continue
             for callee in callees:
-                resolved = _resolve_callee(callee, all_func_names, suffix_index)
+                resolved = _resolve_callee(callee, all_func_names, suffix_index, caller_file=caller_file)
                 if resolved:
                     relevant.add(caller)
                     relevant.add(resolved)
@@ -2217,13 +2298,32 @@ def _build_suffix_index(all_func_names):
     return suffix_index
 
 
-def _resolve_callee(callee, all_func_names, suffix_index=None):
-    """Resolve a callee string to a known qualified function name. O(1) with suffix_index."""
+def _resolve_callee(callee, all_func_names, suffix_index=None, caller_file=None):
+    """Resolve a callee string to a known qualified function name. O(1) with suffix_index.
+
+    R3 (STORY-slim-120): When caller_file is provided and multiple candidates exist,
+    prefer candidates from the same file/package (locality-based resolution).
+    """
     if callee in all_func_names:
         return callee
     if suffix_index is not None:
         candidates = suffix_index.get(callee, [])
-        return candidates[0] if candidates else None
+        if not candidates:
+            return None
+        if len(candidates) == 1 or caller_file is None:
+            return candidates[0]
+        # R3: locality sort — same file first, then same package prefix, then alphabetical
+        def _locality_key(fn):
+            fn_file = fn.rsplit('.', 1)[0] if '.' in fn else fn
+            if fn_file == caller_file:
+                return (0, fn)
+            # same package: caller_file starts with fn's package prefix or vice versa
+            caller_pkg = caller_file.rsplit('.', 1)[0] if '.' in caller_file else caller_file
+            fn_pkg = fn_file.rsplit('.', 1)[0] if '.' in fn_file else fn_file
+            if caller_pkg == fn_pkg or caller_file.startswith(fn_pkg) or fn_file.startswith(caller_pkg):
+                return (1, fn)
+            return (2, fn)
+        return sorted(candidates, key=_locality_key)[0]
     # Fallback: linear scan (legacy, only if suffix_index not provided)
     for fn in all_func_names:
         if fn.endswith(f'.{callee}') or fn == callee:
@@ -2621,7 +2721,19 @@ def visualize(target='.', focus=None, mode='file', entry=None, depth=0, max_node
             dest = root / 'docs/architecture/graphs/reverse_call_graph.mmd'
             if focus: dest = root / 'docs/architecture/graphs/focus_reverse_call_graph.mmd'
         else:
-            dest, content = _build_call_graph(root, all_files, focus, entry, analyzer=analyzer)
+            # R1 (STORY-slim-120): Supplement all_files with test files for call graph only.
+            # tests/ is in SCAN_EXCLUDES for file/class modes but call graph benefits from
+            # seeing test→source call relationships (improves pactkit test-map accuracy).
+            # R2 (STORY-slim-120): Also include scripts/ and alembic/ at project root.
+            call_extra_files = list(all_files)
+            call_extra_excludes = SCAN_EXCLUDES - {'tests'}
+            _call_extra_dirs = ['tests', 'scripts', 'alembic']
+            for _extra_dir in _call_extra_dirs:
+                _extra_root = scan_root / _extra_dir
+                if _extra_root.is_dir():
+                    _extra, _, _ = _scan_files(_extra_root, scan_excludes=call_extra_excludes, file_ext='.py', analyzer=analyzer)
+                    call_extra_files.extend(_extra)
+            dest, content = _build_call_graph(root, call_extra_files, focus, entry, analyzer=analyzer)
     else:
         dest, content = _build_file_graph(root, all_files, module_index, file_to_node, focus, depth=depth, max_nodes=max_nodes, analyzer=analyzer, analyzer_file_groups=analyzer_file_groups, show_layers=show_layers)
         if dest is None: return content  # error message

@@ -1,6 +1,7 @@
 ---
 description: "Product design for greenfield projects: PRD generation, story decomposition, board setup"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
+model: opus
 ---
 
 # Command: Design (v1.3.0 Product Designer)

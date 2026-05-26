@@ -1,6 +1,7 @@
 ---
 name: pactkit-scaffold
 description: "File scaffolding: create Spec, test files, E2E tests, Git branches, Skills"
+model: haiku
 ---
 
 # PactKit Scaffold

@@ -1,6 +1,7 @@
 ---
 description: "Initialize project scaffolding and governance structure"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
+model: sonnet
 ---
 
 # Command: Init (v1.3.0 Rich)

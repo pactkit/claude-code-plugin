@@ -1,6 +1,7 @@
 ---
 description: "Automated PDCA Sprint orchestration via Subagent Team (Slim Team)"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
+model: sonnet
 ---
 
 # Command: Sprint (v1.5.0 Protocol-Only Orchestrator)

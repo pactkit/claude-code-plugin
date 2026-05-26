@@ -1,6 +1,7 @@
 ---
 name: pactkit-garden
 description: "Codebase quality patrol — detect dead code, stale docs, pattern duplication"
+model: sonnet
 ---
 
 # PactKit Garden

@@ -1,6 +1,7 @@
 ---
 description: "Code cleanup, Board update, Git commit"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
+model: sonnet
 ---
 
 # Command: Done (v1.3.0 Smart Gatekeeper)
@@ -30,7 +31,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 - If **no source/test files changed** since the last commit (e.g., only docs, board, graphs, or config changed): log `"Regression: SKIP — no source/test changes since Act"` and proceed directly to Step 2.7 (Smart Lint Gate). This avoids re-running 3000+ tests when Act already verified the code.
 
 ### Step 1: Impact Analysis
-- Check if `docs/architecture/graphs/code_graph.mmd` exists.
+- Check if call graph is available: `pactkit query` (if graph_provider: codegraph) or `docs/architecture/graphs/code_graph.mmd` (grep).
 
 ### Step 1.3: Classification Shortcut
 Run `pactkit regression` (or `pactkit regression <files>`) to classify changes (doc-only → SKIP):
@@ -43,10 +44,10 @@ If `pactkit regression` returns FULL (version/dependency change detected), proce
 Otherwise continue to Step 1.7.
 
 ### Step 1.7: Impact-Based Analysis (STORY-053)
-> **PURPOSE**: Use `call_graph.mmd` to target only tests affected by changed functions.
+> **PURPOSE**: Target only tests affected by changed functions via call graph.
 
-1. **Preconditions**: All of the following must be true to attempt impact analysis:
-   - `docs/architecture/graphs/call_graph.mmd` exists.
+1. **Preconditions**:
+   - Call graph available (`pactkit query` or `call_graph.mmd`).
    - `regression.strategy` is `impact` (read from `pactkit.yaml`; default: `impact`).
 2. **Identify changed functions**: Use `git diff HEAD~1 --unified=0` on changed source files to extract modified function names (look for `def ` in the diff).
 3. **Run impact command** for each changed function:

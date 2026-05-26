@@ -1,6 +1,7 @@
 ---
 description: "Implement code per Spec, strict TDD"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
+model: sonnet
 ---
 
 # Command: Act (v1.3.0 Stack-Aware)
@@ -42,7 +43,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 4.  **Continue**: Regardless of findings, proceed to Phase 1.
 
 ## 🎬 Phase 1: Precision Targeting
-1.  **Targeted Visual Scan**: Run `visualize --focus <module>` only (single targeted mode). For large codebases, add `--depth 2`. Do NOT run full 3-mode visualize here — that is handled by Phase 4 Lazy Visualize after implementation.
+1.  **Targeted Visual Scan**: Run `visualize --focus <module>` only (single targeted mode). For large codebases, add `--depth 2`. Do NOT run full 3-mode visualize here — Phase 4 handles that.
+    - **MUST NOT `Read` a full `.mmd` graph file** — use `pactkit query` or `grep` (see Graph Query Protocol).
 2.  **Trace Verification** — use pactkit-trace skill:
     - Before touching any code, confirm the call site and ensure you don't break existing callers.
 3.  **Interface Summary (Code Enforce)** — for non-target modules discovered by trace:
@@ -73,7 +75,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
       - If third-party: attempt to resolve the dependency (e.g., `pip install`), then STOP and report if unresolvable.
 3.  **Regression Check (Read-Only Gate)**: After the TDD loop is GREEN, run the project's test suite as a broader regression check.
     - Run `pactkit regression` (uses `git diff` + `LANG_PROFILES` to classify: SKIP/FULL/IMPACT). Doc-only changes are auto-skipped.
-    - If IMPACT: run `pactkit test-map <changed-files>` for incremental test selection. If any changed file has 3+ importers in `code_graph.mmd`, run full suite. Fallback: full suite.
+    - If IMPACT: run `pactkit test-map <changed-files>` for incremental test selection. If any changed file has 3+ importers (`pactkit query --callers <file>` or `grep " --> .*<file>" docs/architecture/graphs/code_graph.mmd | wc -l`), run full suite. Fallback: full suite.
     - **CRITICAL — Pre-existing test failure protocol**: If a pre-existing test fails, NEVER modify it — doing so silently corrupts the regression baseline. **STOP** and report to the user. This is a one-shot check, not an iterative loop.
 4.  **Lint Gate**: Run `pactkit lint` to check code style. If lint errors are found, fix them before proceeding. If `pactkit lint` is unavailable, run the stack's lint command directly.
 5.  **Hardcode Self-Check (STORY-slim-105)**: Review the code you just wrote for hardcoded values:
@@ -83,7 +85,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - If found, extract to config/constants before proceeding.
 
 ## 🎬 Phase 4: Sync & Document
-1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed).
+1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed). If `.codegraph/` exists, run `codegraph sync`.
 1b. **Journey Sync (Conditional)**:
     - **Skip if**: `docs/e2e/journey.md` does not exist in the project.
     - **Skip if**: Current Story's Spec has no `## Journey Segment` section.

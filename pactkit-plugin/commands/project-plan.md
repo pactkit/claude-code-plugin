@@ -1,6 +1,7 @@
 ---
 description: "Analyze requirements, create Spec and Story"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
+model: opus
 ---
 
 # Command: Plan (v1.3.0 Integrated Trace)
@@ -60,6 +61,8 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > **Subagent Scope Rule**: When delegating research to an Explore subagent, always provide a **bounded** prompt: target function/class, directory scope, file limit, and expected output. Never delegate open-ended "trace the whole codebase" tasks.
 
 1.  **Visual Scan**: Run `visualize --focus <module> --depth 2` to see the targeted dependency graph. Only expand to `--mode class` or `--mode call` if the focused scan is insufficient.
+    - **MUST NOT `Read` a full `.mmd` graph file** — use `pactkit query` or `grep` (see Graph Query Protocol).
+    - **Codegraph auto-setup**: If `which codegraph` succeeds AND `.codegraph/` does not exist, run `codegraph init -i` and set `visualize.graph_provider: codegraph` in pactkit.yaml. Skip if `.codegraph/` exists.
 2.  **Logic Trace (CRITICAL)** — use pactkit-trace skill:
     - If modifying existing logic, trace the current implementation.
     - *Goal*: Identify the exact function/class responsible for the logic.

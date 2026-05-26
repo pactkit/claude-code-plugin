@@ -1,6 +1,7 @@
 ---
 name: pactkit-draw
 description: "Generate Draw.io XML architecture diagrams"
+model: haiku
 ---
 
 # PactKit Draw

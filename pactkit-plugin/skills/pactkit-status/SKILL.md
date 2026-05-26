@@ -1,6 +1,7 @@
 ---
 name: pactkit-status
 description: "Project state overview for cold-start orientation"
+model: haiku
 ---
 
 # PactKit Status

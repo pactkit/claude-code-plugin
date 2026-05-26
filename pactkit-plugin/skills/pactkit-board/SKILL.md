@@ -1,6 +1,7 @@
 ---
 name: pactkit-board
 description: "Sprint Board atomic operations: add Story, update Task, archive completed Stories"
+model: haiku
 ---
 
 # PactKit Board

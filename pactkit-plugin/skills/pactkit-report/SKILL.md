@@ -1,6 +1,7 @@
 ---
 name: pactkit-report
 description: "Interactive HTML dashboard from Mermaid .mmd architecture graphs"
+model: haiku
 ---
 
 # PactKit Report
