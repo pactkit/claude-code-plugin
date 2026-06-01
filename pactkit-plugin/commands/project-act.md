@@ -85,7 +85,7 @@ model: sonnet
     - If found, extract to config/constants before proceeding.
 
 ## 🎬 Phase 4: Sync & Document
-1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed). If `.codegraph/` exists, run `codegraph sync`.
+1.  Run `pactkit clean` and `pactkit visualize --lazy` (runs file, `--mode class`, `--mode call` if source changed; codegraph sync is handled automatically).
 1b. **Journey Sync (Conditional)**:
     - **Skip if**: `docs/e2e/journey.md` does not exist in the project.
     - **Skip if**: Current Story's Spec has no `## Journey Segment` section.

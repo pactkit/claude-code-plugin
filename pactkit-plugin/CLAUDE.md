@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.14.0 Modular)
+# PactKit Global Constitution (v2.14.2 Modular)
 
 # Workflow Conventions
 
@@ -51,24 +51,6 @@ Choosing WORKAROUND is allowed, but incurs the cost of creating a tracking Story
 - **Tools**: `resolve-library-id` → `get-library-docs`
 - **Trigger**: If you are about to write code using a third-party library and are unsure about the API
 
-### shadcn (`mcp__shadcn__*`)
-- **Purpose**: Search, browse, and install UI components from shadcn registries
-- **When to use**: If the project has a `components.json` file in the project root (indicates shadcn is configured)
-- **Tools**: `search_items_in_registries`, `view_items_in_registries`, `get_item_examples_from_registries`, `get_add_command_for_items`
-- **Trigger**: If designing or implementing UI pages and `components.json` exists
-
-### Playwright MCP (`mcp__playwright__*`)
-- **Purpose**: Browser automation for testing — snapshots, clicks, screenshots, form filling
-- **When to use**: If `mcp__playwright__browser_snapshot` tool is available in the current runtime
-- **Tools**: `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_take_screenshot`, `browser_fill_form`
-- **Trigger**: If running browser-level QA checks (Check command Strategy B)
-
-### Chrome DevTools MCP (`mcp__chrome-devtools__*`)
-- **Purpose**: Performance tracing, console message inspection, network request analysis
-- **When to use**: If `mcp__chrome-devtools__take_snapshot` tool is available in the current runtime
-- **Tools**: `performance_start_trace`, `list_console_messages`, `list_network_requests`, `take_snapshot`, `take_screenshot`
-- **Trigger**: If running browser-level QA checks that need performance or runtime diagnostics
-
 ### Memory MCP (`mcp__memory__*`)
 - **Purpose**: Persistent knowledge graph for cross-session context — store architectural decisions, load prior context, record lessons learned
 - **When to use**: If `mcp__memory__create_entities` tool is available in the current runtime
@@ -76,24 +58,13 @@ Choosing WORKAROUND is allowed, but incurs the cost of creating a tracking Story
 - **Trigger**: If running Plan (store decisions), Act (load context), or Done (record lessons)
 - **Entity naming**: Use `{STORY_ID}` (e.g., "STORY-037") as the entity name, `entityType: "story"`
 
-### Draw.io MCP (`mcp__drawio__*`)
-- **Purpose**: Open generated diagrams directly in Draw.io editor for instant visual verification and interactive editing
-- **When to use**: If `mcp__drawio__open_drawio_xml` tool is available in the current runtime
-- **Tools**: `open_drawio_xml`, `open_drawio_csv`, `open_drawio_mermaid`
-- **Trigger**: After generating a `.drawio` XML file or when visualizing existing `.mmd` Mermaid files in Draw.io
-
 ## Usage by PDCA Phase
 
 | Phase | MCP Server | Condition |
 |-------|-----------|-----------|
 | **Plan** | Memory | If `mcp__memory__*` tools are available |
-| **Plan** | Draw.io MCP | If `mcp__drawio__*` tools are available (diagram generation) |
-| **Design** | shadcn | If `components.json` exists in project root |
-| **Design** | Draw.io MCP | If `mcp__drawio__*` tools are available (architecture visualization) |
 | **Act** | Context7 | If implementing with unfamiliar library API |
 | **Act** | Memory | If `mcp__memory__*` tools are available |
-| **Check** | Playwright MCP | If `mcp__playwright__*` tools are available |
-| **Check** | Chrome DevTools | If `mcp__chrome-devtools__*` tools are available |
 | **Done** | Memory | If `mcp__memory__*` tools are available |
 
 # Shared Protocols

@@ -67,6 +67,9 @@ model: sonnet
 ## 📋 Phase 3.5: Session Context Update
 1.  **Update Context**: Run `pactkit context` to regenerate `docs/product/context.md`. Set "Last updated by" to `/project-hotfix`.
 
+## 📊 Phase 3.6: Codegraph Sync
+1.  Run `pactkit sync` to update the codegraph index (auto-skips if codegraph is not configured).
+
 ## 🚫 What This Command Does NOT Do
 - Does not require writing tests before code (no TDD)
 - Does not run `visualize` to update architecture graphs
