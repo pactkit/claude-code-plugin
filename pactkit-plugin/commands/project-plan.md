@@ -97,7 +97,12 @@ model: opus
 ## 🎬 Phase 2: Design & Impact
 1.  **Diff**: Compare User Request vs Current Reality (from Phase 1).
 2.  **Duplication Audit**: Run the Duplication Audit from system-architect protocol — if this is the Nth same-kind implementation, grep existing implementations and assess shared abstraction needs before writing Spec.
-3.  **Update HLD**: Modify `docs/architecture/graphs/system_design.mmd`.
+3.  **Engineering Concerns Assessment** — scan the requirement for NFR keywords:
+    - Reference the Engineering Concerns trigger index (`07-engineering-concerns.md`) keyword table.
+    - For each matched concern, the Spec's Technical Design MUST include a decision (e.g., concurrency model, timeout strategy, caching policy).
+    - Unmatched concerns → do not add (avoid noise).
+    - **Output checkpoint**: `"Engineering concerns identified: {list}. Decisions will be included in Technical Design."`
+4.  **Update HLD**: Modify `docs/architecture/graphs/system_design.mmd`.
     - *Rule*: Keep the `code_graph.mmd` as is (it updates automatically).
 
 ## 🎬 Phase 3.1: Story ID Generation

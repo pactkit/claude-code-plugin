@@ -57,7 +57,18 @@ model: sonnet
     - For **agent**: Check AgentParser output for orchestration edges so new code doesn't break agent flow.
 5.  **Solution Design Protocol (Conditional)** — if the implementation involves frameworks already used by the project:
     - Execute the **Solution Design Protocol** from `06-solution-design.md` to evaluate capability delta before writing code.
-    - Output brief capability assessment before proceeding to Phase 2.
+    - Output brief capability assessment before proceeding to Phase 1.5.
+
+## 🔧 Phase 1.5: Engineering Concerns Loading (Conditional)
+> **PURPOSE**: Load only the NFR guides relevant to this Story — keeps context minimal while ensuring engineering rigor.
+1.  **Read Spec Technical Design**: Check if the Spec contains engineering concern decisions (from Plan Phase 2).
+2.  **Identify concerns**: Extract the concern keywords mentioned (e.g., database, api-integration, resilience).
+3.  **Load guides**: For each identified concern, read the corresponding guide file from `{GUIDES_PATH}/`:
+    - MUST load only 1-3 relevant guides (those matching the Spec's concerns).
+    - NEVER load all 13 guides.
+    - If Spec has no engineering concerns section, skip this phase silently.
+4.  **Apply constraints**: Use the loaded guides' MUST/NEVER rules as implementation constraints in Phase 3.
+5.  **Output checkpoint**: `"Engineering guides loaded: {list}. Applying as implementation constraints."`
 
 ## 🎬 Phase 2: Test Scaffolding (TDD)
 1.  **Constraint**: NEVER write source code in this phase — doing so breaks TDD causality: tests must exist before the code they verify.

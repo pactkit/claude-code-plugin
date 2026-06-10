@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.14.2 Modular)
+# PactKit Global Constitution (v2.15.1 Modular)
 
 # Workflow Conventions
 
@@ -438,6 +438,69 @@ Do not import from higher-level modules into lower-level modules. Domain/core im
 |----------|--------------|
 | **pactkit-trace** | Trace = call chains (vertical). This protocol = capability reuse (horizontal). Run Trace first, then this. |
 | **Hierarchy of Truth** | Output goes into Spec (Tier 1). Implementation MUST follow Technical Design in Spec. |
+
+# Engineering Concerns — Trigger Index
+
+> Referenced by: Plan Phase 2, Act Phase 1.5
+> Signal Level: L2 Strong (MUST)
+> This file is a routing table. Detailed guidance lives in guides/ files loaded on demand.
+
+## Plan Phase: NFR Decision Gate
+
+When writing Spec's Technical Design, scan requirement keywords.
+If matched, the Spec MUST include a decision for that concern:
+
+| Keyword in Requirement | Concern | Spec Must Answer |
+|------------------------|---------|-----------------|
+| 定时/cron/schedule/parallel/concurrent/多线程/多进程 | concurrency | Concurrency model? (sync/async/threads/processes) |
+| async/await/异步/event loop/协程 | async-patterns | Sync or async architecture? Blocking call strategy? |
+| API/HTTP/webhook/第三方/external/REST/gRPC | api-integration | Timeout? Retry count? Circuit breaker? Fallback? |
+| 数据库/DB/SQL/ORM/query/transaction/事务 | database | Connection pool? Lock strategy? Transaction scope? |
+| 缓存/cache/Redis/Memcached/内存数据库 | caching | Strategy? TTL? Consistency? Eviction? |
+| event/消息/queue/publish/subscribe/通知/MQ | event-driven | Sync/async delivery? Idempotency? DLQ? |
+| 配置/config/环境变量/secret/密钥 | configuration | Config layering? Secret management? |
+| log/日志/监控/metrics/trace/observability | observability | Log library? Level strategy? Trace ID? |
+| 模块/module/抽象/decouple/拆分/重构 | module-design | Module boundary? Single responsibility? |
+| timeout/超时/熔断/降级/circuit/breaker/阻塞 | resilience | Timeout strategy? Fallback? Health check? |
+| 内存/memory/leak/GC/OOM/streaming/大文件 | memory-management | Bounded collections? Streaming? Cleanup? |
+| 复用/reuse/已有/existing/library/依赖 | component-reuse | Stdlib? Project existing? Third-party? |
+| review/代码审查/架构/convention/约定 | code-review-first | Exemplar file? Existing patterns? |
+| retry/重试/backoff/幂等/idempoten/partial failure | error-recovery | Retry strategy? Backoff? Idempotency? Partial failure? |
+| 一致性/consistency/saga/补偿/idempotency key/分布式事务 | data-consistency | Transaction scope? Compensation? Optimistic lock? |
+| 兼容/backward/breaking change/deprecat/migration/版本 | backwards-compatibility | API version? Non-breaking migration? Deprecation? |
+| N+1/unbounded/分页/pagina/index/索引/热路径/hot path | performance-antipatterns | Pagination? Batch fetch? Index? Cache? |
+| shutdown/优雅关闭/SIGTERM/drain/信号处理 | graceful-shutdown | Signal handler? Drain timeout? Cleanup order? |
+| 测试策略/test strategy/mock/stub/boundary/隔离/isolation | testing-strategy | Mock vs real? Boundary tests? Test isolation? |
+
+Unmatched concerns → do not appear in Spec (avoid noise).
+
+## Act Phase: Guide Loading Table
+
+After reading Spec's Technical Design, load ONLY the matched guides:
+
+| Concern | Guide File |
+|---------|-----------|
+| concurrency | {GUIDES_PATH}/concurrency.md |
+| async-patterns | {GUIDES_PATH}/async-patterns.md |
+| configuration | {GUIDES_PATH}/configuration.md |
+| observability | {GUIDES_PATH}/observability.md |
+| module-design | {GUIDES_PATH}/module-design.md |
+| database | {GUIDES_PATH}/database.md |
+| caching | {GUIDES_PATH}/caching.md |
+| api-integration | {GUIDES_PATH}/api-integration.md |
+| event-driven | {GUIDES_PATH}/event-driven.md |
+| resilience | {GUIDES_PATH}/resilience.md |
+| memory-management | {GUIDES_PATH}/memory-management.md |
+| code-review-first | {GUIDES_PATH}/code-review-first.md |
+| component-reuse | {GUIDES_PATH}/component-reuse.md |
+| error-recovery | {GUIDES_PATH}/error-recovery.md |
+| data-consistency | {GUIDES_PATH}/data-consistency.md |
+| backwards-compatibility | {GUIDES_PATH}/backwards-compatibility.md |
+| performance-antipatterns | {GUIDES_PATH}/performance-antipatterns.md |
+| graceful-shutdown | {GUIDES_PATH}/graceful-shutdown.md |
+| testing-strategy | {GUIDES_PATH}/testing-strategy.md |
+
+MUST load only 1-3 relevant guides. NEVER load all 19.
 
 # Core Protocol
 
