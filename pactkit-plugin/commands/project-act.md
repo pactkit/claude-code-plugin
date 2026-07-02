@@ -39,7 +39,7 @@ model: sonnet
 > **NON-BLOCKING**: This phase NEVER stops Act.
 1.  **Spec exists?**: Check if `docs/specs/{STORY_ID}.md` exists. If not: WARN "Spec not found".
 2.  **Board entry exists?**: Check if `{STORY_ID}` appears in `docs/product/sprint_board.md`. If not: WARN "Board entry not found".
-3.  **Move to In Progress**: If `{STORY_ID}` is found on the board, move it to In Progress section.
+3.  **Move to In Progress**: If `{STORY_ID}` is found on the board, run `{BOARD_CMD} move_story "{STORY_ID}" "in_progress"`.
 4.  **Continue**: Regardless of findings, proceed to Phase 1.
 
 ## 🎬 Phase 1: Precision Targeting
@@ -56,13 +56,13 @@ model: sonnet
     - For **api_call**: Run `api_convention_summary(root)` to check API path prefixes and fetch function conventions. Use these conventions when writing new API calls to maintain consistency.
     - For **agent**: Check AgentParser output for orchestration edges so new code doesn't break agent flow.
 5.  **Solution Design Protocol (Conditional)** — if the implementation involves frameworks already used by the project:
-    - Execute the **Solution Design Protocol** from `06-solution-design.md` to evaluate capability delta before writing code.
+    - Execute the **Solution Design Protocol** from `{SKILLS_ROOT}/_rules/06-solution-design.md` to evaluate capability delta before writing code.
     - Output brief capability assessment before proceeding to Phase 1.5.
 
 ## 🔧 Phase 1.5: Engineering Concerns Loading (Conditional)
 > **PURPOSE**: Load only the NFR guides relevant to this Story — keeps context minimal while ensuring engineering rigor.
 1.  **Read Spec Technical Design**: Check if the Spec contains engineering concern decisions (from Plan Phase 2).
-2.  **Identify concerns**: Extract the concern keywords mentioned (e.g., database, api-integration, resilience).
+2.  **Identify concerns**: Extract the concern keywords mentioned (e.g., database, api-integration, resilience). Reference `{SKILLS_ROOT}/_rules/07-engineering-concerns.md` for the keyword→guide mapping table.
 3.  **Load guides**: For each identified concern, read the corresponding guide file from `{GUIDES_PATH}/`:
     - MUST load only 1-3 relevant guides (those matching the Spec's concerns).
     - NEVER load all 13 guides.

@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.15.1 Modular)
+# PactKit Global Constitution (v2.15.2 Modular)
 
 # Workflow Conventions
 

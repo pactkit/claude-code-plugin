@@ -77,17 +77,10 @@ pactkit query --callees deploy
 pactkit query --chain atomic_write       # transitive upstream
 pactkit query --chain deploy --down      # transitive downstream
 
-# Direct codegraph CLI (richer features):
-codegraph callers <symbol>
-codegraph callees <symbol>
-codegraph impact <symbol> --depth 3      # transitive impact radius
-codegraph query <search> --kind function # FTS5 symbol search
-codegraph context <task>                 # task-focused context builder
-codegraph affected <files...>            # find affected test files
-codegraph status                         # check index health
+# Direct codegraph CLI — run `codegraph --help` for full command list.
 ```
 
-MCP tools (if codegraph MCP server configured): `codegraph_callers`, `codegraph_callees`, `codegraph_impact`, `codegraph_trace`, `codegraph_context`.
+MCP tools (if codegraph MCP server configured): run `codegraph --help` or check ToolSearch for available `codegraph_*` tools.
 
 ### Grep Mode (default — when graph_provider not set, use .mmd files)
 
