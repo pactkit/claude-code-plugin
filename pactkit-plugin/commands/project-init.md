@@ -1,7 +1,6 @@
 ---
 description: "Initialize project scaffolding and governance structure"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
-model: sonnet
 ---
 
 # Command: Init (v1.3.0 Rich)
@@ -42,6 +41,13 @@ model: sonnet
 4.  **Project Instructions File**: Check/Create `./{PROJECT_CONFIG_DIR}/{INSTRUCTIONS_FILE}` if missing (do NOT overwrite).
     - Use the directory name as the project name. Fill test_runner and lint_command from the detected language stack in LANG_PROFILES.
     - Include: venv instructions (if detected), dev commands, `@./docs/product/context.md` reference for cross-session context.
+
+## 🔌 Phase 1.5: External Dependencies (STORY-slim-137)
+> Runs BEFORE Phase 3 — Discovery (codegraph) depends on these tools.
+1.  Run `pactkit deps check`. If all present, skip silently.
+2.  If anything is missing, list items + purposes and ask the user: "Install now?"
+3.  On explicit yes: run `pactkit deps install`. NEVER improvise install commands — the CLI owns the registry.
+4.  If declined/failed/refused (`enterprise.no_external`): print the manual commands and continue — MUST NOT block init.
 
 ## 🎬 Phase 2: Architecture Governance
 1.  **Scaffold**: Run `{VISUALIZE_CMD} init_arch`.

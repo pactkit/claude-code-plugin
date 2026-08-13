@@ -1,7 +1,6 @@
 ---
 description: "Version release: snapshot, archive, Git tag, and GitHub Release"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
-model: sonnet
 ---
 
 # Command: Release (v1.4.0)

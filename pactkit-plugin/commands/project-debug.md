@@ -1,7 +1,6 @@
 ---
 description: "Hypothesis-driven troubleshooting: structured debug from symptom to root cause"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
-model: sonnet
 ---
 @{{SKILLS_PREFIX}}_rules/03-shared-protocols.md
 

@@ -1,7 +1,6 @@
 ---
 description: "Standalone requirement clarification before planning"
 allowed-tools: [Read, Bash, Glob, Grep]
-model: sonnet
 ---
 
 # Command: Clarify (v1.1.0)

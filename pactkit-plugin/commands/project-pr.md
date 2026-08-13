@@ -1,7 +1,6 @@
 ---
 description: "Push branch and create pull request via gh CLI"
 allowed-tools: [Read, Write, Edit, Bash, Glob]
-model: sonnet
 ---
 
 # Command: PR (v1.4.0)

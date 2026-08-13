@@ -1,7 +1,6 @@
 ---
 description: "Analyze requirements, create Spec and Story"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
-model: opus
 ---
 
 # Command: Plan (v1.3.0 Integrated Trace)

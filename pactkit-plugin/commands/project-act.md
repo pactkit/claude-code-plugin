@@ -1,7 +1,6 @@
 ---
 description: "Implement code per Spec, strict TDD"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
-model: sonnet
 ---
 
 # Command: Act (v1.3.0 Stack-Aware)
