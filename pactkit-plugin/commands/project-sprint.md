@@ -11,6 +11,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 > Each subagent reads `docs/specs/`, `commands/*.md`, and `docs/product/sprint_board.md` from disk.
 
 ## Phase 0: Setup
+0. **Mode Detection (STORY-slim-144)**: `$ARGUMENTS` non-empty → single-story mode (proceed below). Empty → Wave Mode (see Wave Mode section).
 1. Parse requirement from `$ARGUMENTS`. Run `pactkit next-id` to determine next STORY-ID.
 2. `TeamCreate("sprint-{STORY_ID}")`.
 3. `TaskCreate` for each stage: Plan (no deps), Act (blockedBy: Plan), Check-QA (blockedBy: Act), Close (blockedBy: Check-QA).
@@ -40,6 +41,18 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 1. `SendMessage(type="shutdown_request")` to all teammates.
 2. `TeamDelete` to remove task directory.
 3. Report: Spec path, test results, commit hash, report files.
+
+## Wave Mode (STORY-slim-144)
+> Trigger: `/project-sprint` with empty `$ARGUMENTS` — conflict-aware parallel orchestration over the backlog. Scheduling data comes from code (`spec-graph`), NEVER from Lead judgment.
+
+1. **Wave Plan (before any dispatch)**: Run `{BOARD_CMD} list_stories` (BACKLOG IDs) + `pactkit spec-graph --json` (waves + conflicts, deterministic). Filter to backlog IDs with Specs. Partition each wave:
+   - **Parallel batch**: declared Touches (no placeholder) AND pairwise non-conflicting per the matrix. Cap: `sprint.max_parallel` from `{PACTKIT_YAML}` (default 3); excess spills to the next sub-batch.
+   - **Serialized tail**: same-wave-conflicted or undeclared Touches — run one at a time after the batch. Safe-by-default: unknown conflict surface = NEVER parallelize.
+   - If no story is parallelizable, log and suggest single-story mode instead.
+2. **Print the wave plan** (wave N: parallel=[...], serialized=[...], skipped=[...] with reasons) and wait for user confirmation before spawning any subagent.
+3. **Dispatch**: each story (parallel or serialized) runs the Stage A→B→C chain above in its own worktree — reference those stages verbatim; do NOT redefine them.
+4. **Wave Gate**: wave N+1 MUST NOT start until every wave-N story is merged green. Merges are always sequential (one worktree at a time).
+5. **Failure policy**: fail-fast — any story failure STOPs the wave; report completed/merged vs pending; NEVER auto-retry. Resume = re-run `/project-sprint` (spec-graph excludes Done stories, so re-runs are idempotent).
 
 ## Error Handling
 - ANY stage failure → STOP immediately, report, always run `TeamDelete`.

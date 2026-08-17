@@ -116,6 +116,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
     - Edit `(Description of the problem or feature)` → actual Background content from your Trace findings
     - Edit `## Target Call Chain` placeholder → actual call chain from Phase 1
     - Edit `### R1: (Requirement Name) (MUST)` → actual requirements using RFC 2119 keywords (MUST/SHOULD/MAY). Add more R{N} sections as needed.
+    - Edit `## Dependency Surface` fields (dangling ID = E010; feeds `pactkit spec-graph`)
 4.  **Journey Segment (Conditional)**: If `docs/e2e/journey.md` exists in the project:
     - Read `docs/e2e/journey.md` to identify defined journeys and their steps.
     - Assess whether this Story's scope touches any journey step (e.g., modifies a UI flow, changes an API endpoint used in a journey).

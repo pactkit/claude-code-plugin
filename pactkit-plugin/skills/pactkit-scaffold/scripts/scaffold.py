@@ -159,6 +159,15 @@ _SPEC_TEMPLATE = """\
 |-------|------------|--------|
 | SEC-1 | N/A | (Reason) |
 
+## Dependency Surface
+
+| Field | Value |
+|-------|-------|
+| Depends on | None |
+| Provides | None |
+| Touches | (files this story modifies) |
+| Conflict risk | LOW |
+
 ## Out of Scope
 
 - (Items explicitly excluded)
