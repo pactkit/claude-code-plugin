@@ -8,7 +8,27 @@ PactKit compiles development workflows, role-based agents, and behavioral govern
 
 ## Installation
 
-### Option A: Claude Code Plugin (this repo)
+### Option A: Plugin Marketplace (recommended)
+
+Inside Claude Code:
+
+```
+/plugin marketplace add pactkit/claude-code-plugin
+/plugin install pactkit@pactkit
+```
+
+Claude Code will prompt for a restart; afterwards `/project-plan` and the other commands are available. Updates arrive via `/plugin` → check for updates.
+
+### Option B: PyPI
+
+Install via pip and let PactKit deploy automatically:
+
+```bash
+pip install pactkit
+pactkit init
+```
+
+### Option C: Manual copy
 
 Copy the `pactkit-plugin/` directory into your project:
 
@@ -18,15 +38,6 @@ cp pactkit-plugin/CLAUDE.md /path/to/your/project/.claude/
 cp -r pactkit-plugin/agents /path/to/your/project/.claude/
 cp -r pactkit-plugin/commands /path/to/your/project/.claude/
 cp -r pactkit-plugin/skills /path/to/your/project/.claude/
-```
-
-### Option B: PyPI (recommended)
-
-Install via pip and let PactKit deploy automatically:
-
-```bash
-pip install pactkit
-pactkit init
 ```
 
 See the [main repository](https://github.com/pactkit/pactkit-public) for full documentation.
