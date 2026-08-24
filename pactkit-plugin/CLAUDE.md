@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.19.0 Modular)
+# PactKit Global Constitution (v2.21.0 Modular)
 
 # Workflow Conventions
 
@@ -69,6 +69,9 @@ Choosing WORKAROUND is allowed, but incurs the cost of creating a tracking Story
 
 # Shared Protocols
 
+## Managed Workflow and Pre-Final Protocol
+Every `project-*` command starts or resumes its registered run, checkpoints each declared boundary, and completes only with verified evidence. Before final output run `pactkit workflow finish-guard <run-id> --json`. A non-zero or `continue_current_turn` decision means continue tools at `next_step` in the same turn; progress summaries are never final. Only `done` or a verified external `await_user` blocker may end. Manual operations such as commit, archive, tag, publish, release, push, and pull request always require fresh authorization.
+
 ## Lazy Visualize Protocol
 > Referenced by: Act Phase 4, Done Phase 2
 
@@ -79,10 +82,10 @@ If source files changed (per `LANG_PROFILES[stack].source_dirs`) OR `code_graph.
 
 Map changed source files to test files via `LANG_PROFILES[stack].test_map_pattern`. If no mapping can be determined, fall back to the full test suite.
 
-## Context.md Canonical Format
+## Local Context Projection Format
 > Referenced by: Init Phase 6, Plan Phase 3, Act Phase 4, Done Phase 4.5
 
-Write `docs/product/context.md` using this format:
+Generate ignored `.pactkit/context.md` using this format:
 ```markdown
 # Project Context (Auto-generated)
 > Last updated: {ISO timestamp} by {command}
@@ -100,7 +103,7 @@ Write `docs/product/context.md` using this format:
 {git branch output, or "None" if no feature/fix branches}
 
 ## Key Decisions
-{Last 5 lessons from lessons.md}
+{Last 5 records from docs/architecture/governance/lessons/}
 
 ## Next Recommended Action
 {If In Progress: `/project-act STORY-XXX` | If Backlog only: `/project-plan` | If empty: `/project-design`}
@@ -507,12 +510,12 @@ MUST load only 1-3 relevant guides. NEVER load all 19.
 ## Session Context
 On new session, run `pactkit update --if-needed` to sync project files if PactKit was upgraded.
 If `pactkit.yaml` does not exist (check `{PROJECT_CONFIG_DIR}/`), run `pactkit init` to create it before proceeding.
-Then read `docs/product/context.md` to understand project state before taking action.
+Then run `pactkit context` and read `.pactkit/context.md` to understand project state before taking action.
 If the file is missing, suggest `/project-init` to bootstrap the project.
 If "Last updated" date is before today, suggest running `$daily-retro`.
 
 ## PDCA Nudge
-When AI analysis in free conversation (outside PDCA command context) yields actionable conclusions — bugs, architecture improvements, new feature needs — SHOULD recommend the appropriate PDCA command at the end of the reply. See the PDCA Nudge Protocol section below for trigger matrix and suppression rules.
+When free-conversation analysis yields actionable bugs, architecture improvements, or features, SHOULD recommend the appropriate PDCA command. See PDCA Nudge Protocol below.
 
 ## Visual First
 Before modifying code:
@@ -604,7 +607,8 @@ When skipping a SHOULD requirement, leave a traceable comment:
 |------|---------|
 | `docs/specs/{ID}.md` | **The Law** -- Requirement Specifications (Spec) |
 | `commands/*.md` | **The Playbooks** -- Command Execution Logic |
-| `docs/product/sprint_board.md` | Sprint Board -- Current Iteration Board |
+| `docs/product/stories/{ITEM_ID}.yaml` | Story workflow/task facts |
+| `docs/product/sprint_board.md` | Optional read-only Board projection |
 | `docs/test_cases/{ID}_case.md` | Test Cases -- Gherkin Acceptance Scenarios |
 | `docs/architecture/graphs/*.mmd` | Architecture Graphs -- Mermaid Architecture Diagrams |
 | `tests/unit/` | Unit Tests |
@@ -623,7 +627,7 @@ When skipping a SHOULD requirement, leave a traceable comment:
 ### Init (`/project-init`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-init.md`
-- **When NOT to use**: Project already has `pactkit.yaml` and `docs/product/sprint_board.md`. Use `pactkit update` instead to sync after upgrades.
+- **When NOT to use**: Project already has `pactkit.yaml` and `docs/product/stories/`. Use `pactkit update` instead to sync after upgrades.
 
 ### Plan (`/project-plan`)
 - **Role**: System Architect

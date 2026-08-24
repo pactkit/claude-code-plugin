@@ -1,7 +1,11 @@
 ---
 name: pactkit-trace
 description: "Deep code tracing and execution flow analysis"
+model: sonnet
 ---
+
+## Provider Routing (MUST)
+Start every callers, callees, chain, explore or impact trace with `pactkit query ... --json --explain`. When `graph_provider: codegraph` is configured, Codegraph is mandatory and failures are closed by default. Never select Mermaid or grep yourself; only use `--allow-fallback` when the caller explicitly authorizes degradation, and retain the provider decision as evidence. A healthy empty result is `valid_empty`, not a fallback signal.
 
 # PactKit Trace
 
@@ -14,12 +18,12 @@ Deep code analysis and execution path tracing via static analysis.
 ## Protocol
 
 ### 1. Feature Discovery
-- Use `Grep` to locate entry points (API route, CLI arg, Event handler).
+- Use `pactkit query --explore <target> --json --explain` to locate entry points.
 - Map core files involved — don't read everything yet.
 
 ### 2. Call Graph Analysis
-- Run `visualize --mode call --entry <function_name>` to obtain call chains.
-- Read `docs/architecture/graphs/call_graph.mmd` to see all reachable functions.
+- Run `pactkit query --chain <function_name> --json --explain` to obtain call chains.
+- Query callers/callees through the same router; never select Codegraph, Mermaid, SQLite, or text search directly.
 
 ### 3. Deep Tracing
 - Follow call chain file by file, recording data transformations.
@@ -27,18 +31,14 @@ Deep code analysis and execution path tracing via static analysis.
 
 #### Layered Output: Interface Summary vs Full Implementation
 
-| Module Role | Output Level | Content |
-|-------------|-------------|---------|
-| Target (to be modified) | Full implementation | Complete function bodies |
-| Related (dependency, not modified) | Interface summary | Signature + types + docstring only |
+| Module Role | Output Level | How |
+|-------------|-------------|-----|
+| Target (to be modified) | Full implementation | `Read <file>` |
+| Related (dependency, not modified) | Interface summary | `pactkit interface-summary <file>` |
 
-**Interface Summary Extraction by Language:**
+For related (non-target) modules, run `pactkit interface-summary <file>` instead of reading full source. This CLI command uses AST parsing to output only signatures + types + docstrings — function bodies are excluded by code, not by prompt instruction.
 
-- **Python**: `def name(params) -> ReturnType:` + docstring + `@decorator` annotations
-- **TypeScript**: `export function/interface/type` declarations + JSDoc comments
-- **Go**: Exported `func Name(params) ReturnType` + struct definitions + godoc comment
-
-Interface summary is produced on-the-fly during trace output — no separate files are generated (DRY: avoid stale pre-generated artifacts).
+If `pactkit` is not on `$PATH`, use `python3 -m pactkit interface-summary <file>`.
 
 ### 4. Visual Synthesis
 Output a **Mermaid Sequence Diagram** to visualize the flow.

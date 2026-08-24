@@ -47,8 +47,8 @@ See the [main repository](https://github.com/pactkit/pactkit-public) for full do
 | Directory | Contents | Count |
 |-----------|----------|-------|
 | `agents/` | Role-based AI agent definitions | 9 |
-| `commands/` | PDCA command playbooks | 11 |
-| `skills/` | Specialized skill modules | 10 |
+| `commands/` | Core-managed lifecycle entry points | 12 |
+| `skills/` | Specialized and portable method modules | 19 |
 | `CLAUDE.md` | Global constitution (behavioral rules) | 1 |
 
 ### Commands
@@ -66,6 +66,7 @@ See the [main repository](https://github.com/pactkit/pactkit-public) for full do
 | `/project-pr` | Push branch and create pull request |
 | `/project-init` | Initialize project scaffolding |
 | `/project-clarify` | Standalone requirement clarification |
+| `/project-debug` | Evidence-driven diagnosis with resumable workflow state |
 
 ### Agents
 

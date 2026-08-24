@@ -20,7 +20,7 @@ Transform product visions into comprehensive PRDs, decompose them into implement
 ## Output
 - `docs/product/prd.md` — Product Requirements Document (the master plan)
 - `docs/specs/STORY-{NNN}.md` — Individual Specs decomposed from PRD (one per Story)
-- `docs/product/sprint_board.md` — All stories added via `add_story`, ordered by priority
+- `docs/product/stories/{ITEM_ID}.yaml` — All stories created via `add_story`
 - `docs/architecture/graphs/system_design.mmd` — High-level architecture diagram
 
 ## Protocol (/project-design)

@@ -30,30 +30,24 @@ def _board_path():
     return p, None
 
 
+def _story_repository():
+    """Load the Core-owned repository or fail without touching legacy views."""
+    try:
+        from pactkit.governance import StoryRepository
+    except ImportError as exc:
+        raise RuntimeError(
+            "pactkit Core with sharded governance support is required; run `pip install -U pactkit`"
+        ) from exc
+    return StoryRepository(Path.cwd())
+
+
 # --- BOARD ---
 def add_story(sid, title, tasks):
-    p, err = _board_path()
-    if err:
-        return err
-    content = p.read_text(encoding="utf-8")
-    # R6: Duplicate guard — check if story already exists on board
-    existing_blocks = _parse_story_blocks(content)
-    for block_sid, *_ in existing_blocks:
-        if block_sid == sid:
-            return f"❌ Story {sid} already on board"
-    t_md = nl().join([f"- [ ] {t.strip()}" for t in tasks.split("|") if t.strip()])
-    entry = f"{nl()}### [{sid}] {title}{nl()}> Spec: docs/specs/{sid}.md{nl()}{nl()}{t_md}{nl()}"
-    # Insert before In Progress section
-    idx = content.find(_IN_PROGRESS)
-    if idx == -1:
-        # Fallback: append (shouldn't happen with valid board)
-        content += entry
-    else:
-        content = content[:idx] + entry + nl() + content[idx:]
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    os.replace(tmp, p)
-    return f"✅ Story {sid} added"
+    try:
+        _story_repository().add(sid, title, [task.strip() for task in tasks.split("|") if task.strip()])
+        return f"✅ Story {sid} added"
+    except (RuntimeError, ValueError) as exc:
+        return f"❌ {exc}"
 
 
 def _parse_story_blocks(content):
@@ -99,6 +93,20 @@ def _classify_story(block_text):
 
 
 def fix_board():
+    """Regenerate the deterministic projection; never infer facts from it."""
+    try:
+        from pactkit.governance import BoardRenderer
+        from pactkit.utils import atomic_write
+
+        repository = _story_repository()
+        path = Path.cwd() / "docs/product/sprint_board.md"
+        atomic_write(path, BoardRenderer(repository).render())
+        return f"✅ Board projection rendered: {len(repository.list())} stories."
+    except (RuntimeError, ValueError, OSError) as exc:
+        return f"❌ {exc}"
+
+
+def _legacy_fix_board():
     p, err = _board_path()
     if err:
         return err
@@ -179,6 +187,15 @@ def _mark_done(content, story_match, story_block, old_task):
 
 def update_task(sid, tasks_list):
     task_name = " ".join(tasks_list)
+    try:
+        _story_repository().complete_task(sid, task_name)
+        return f"✅ Task {sid} updated: {task_name}"
+    except (RuntimeError, ValueError) as exc:
+        return f"❌ {exc}"
+
+
+def _legacy_update_task(sid, tasks_list):
+    task_name = " ".join(tasks_list)
     p, err = _board_path()
     if err:
         return err
@@ -197,7 +214,7 @@ def update_task(sid, tasks_list):
     def _update_and_fix(content, matched_task):
         content = _mark_done(content, story_match, story_block, matched_task)
         _write_board(p, content)
-        fix_board()  # Explicit call for auto-move (R4: not in _write_board)
+        _legacy_fix_board()  # Legacy fixture path only.
         return f"✅ Task {sid} updated: {matched_task}"
 
     # Strategy 1: Exact match
@@ -251,6 +268,15 @@ def snapshot_graph(version):
 # --- MOVE ---
 def move_story(sid, target):
     """Move a story to the specified section regardless of checkbox state."""
+    try:
+        _story_repository().move(sid, target)
+        return f"✅ Moved {sid} to {target}"
+    except (RuntimeError, ValueError) as exc:
+        return f"❌ {exc}"
+
+
+def _legacy_move_story(sid, target):
+    """Legacy parser retained only for migration fixtures."""
     valid_targets = {"backlog": _BACKLOG, "in_progress": _IN_PROGRESS, "done": _DONE}
     if target not in valid_targets:
         return f"❌ Invalid target: {target}. Use: backlog, in_progress, done"
@@ -299,6 +325,21 @@ def move_story(sid, target):
 
 # --- LIST ---
 def list_stories():
+    try:
+        records = _story_repository().list()
+    except (RuntimeError, ValueError) as exc:
+        return f"❌ {exc}"
+    if not records:
+        return "No stories on board."
+    return nl().join(
+        f"{record['id']} | {record['title']} | "
+        f"{sum(task['completed'] for task in record['tasks'])}/{len(record['tasks'])} | "
+        f"{record['status'].upper()}"
+        for record in records
+    )
+
+
+def _legacy_list_stories():
     p, err = _board_path()
     if err:
         return err
@@ -329,6 +370,19 @@ def list_stories():
 
 # --- ARCHIVE ---
 def archive_stories():
+    try:
+        repository = _story_repository()
+        completed = [record for record in repository.list() if record["status"] == "done"]
+        for record in completed:
+            repository.move(record["id"], "archived")
+        if not completed:
+            return "✅ No completed stories to archive."
+        return f"✅ Archived {len(completed)} Story records"
+    except (RuntimeError, ValueError) as exc:
+        return f"❌ {exc}"
+
+
+def _legacy_archive_stories():
     board_path, err = _board_path()
     if err:
         return err
@@ -385,6 +439,8 @@ if __name__ == "__main__":
     sub.add_parser("archive")
     sub.add_parser("list_stories")
     sub.add_parser("fix_board")
+    p_render = sub.add_parser("render")
+    p_render.add_argument("--check", action="store_true")
 
     a = parser.parse_args()
     if a.cmd == "add_story":
@@ -401,3 +457,18 @@ if __name__ == "__main__":
         print(move_story(a.story_id, a.target))
     elif a.cmd == "fix_board":
         print(fix_board())
+    elif a.cmd == "render":
+        from pactkit.governance import BoardRenderer
+        from pactkit.utils import atomic_write
+
+        repository = _story_repository()
+        output = Path.cwd() / "docs/product/sprint_board.md"
+        renderer = BoardRenderer(repository)
+        if a.check:
+            if not renderer.check(output):
+                print("❌ Board projection drift")
+                raise SystemExit(1)
+            print("✅ Board projection current")
+        else:
+            atomic_write(output, renderer.render())
+            print(f"✅ Board projection rendered: {output}")

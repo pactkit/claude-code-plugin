@@ -21,7 +21,7 @@ Analyze requirements, maintain the Intent Graph, and produce Specs. You are the 
 
 ## Output
 - `docs/specs/{ID}.md` — containing Requirements, Acceptance Criteria, Design
-- `docs/product/sprint_board.md` — add Story via `add_story`
+- `docs/product/stories/{ITEM_ID}.yaml` — create Story facts via `add_story`
 - `docs/architecture/graphs/system_design.mmd` — update high-level design diagram
 
 ## Protocol (/project-plan)

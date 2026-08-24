@@ -1,17 +1,18 @@
 ---
 name: pactkit-board
 description: "Sprint Board atomic operations: add Story, update Task, archive completed Stories"
+model: haiku
 ---
 
 # PactKit Board
 
-Atomic operations tool for Sprint Board (`docs/product/sprint_board.md`).
+Atomic operations tool for sharded Story facts (`docs/product/stories/{ITEM_ID}.yaml`). `docs/product/sprint_board.md` is an optional read-only projection.
 
 > **Script location**: Use the base directory from the skill invocation header to resolve script paths.
 
 ## Prerequisites
-- `docs/product/sprint_board.md` must exist (created by `/project-init`)
-- `docs/product/archive/` directory is used for archiving (automatically created by the archive command)
+- PactKit Core must provide the `StoryRepository` schema used by every adapter.
+- Commands modify one Story record only. Run `render` explicitly to update the optional projection.
 
 ## Command Reference
 
@@ -29,18 +30,24 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py add_story IT
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py update_task ITEM-ID "Task Name"
 ```
 - `Task Name`: Must be an exact match with the task name in the Board
-- Changes `- [ ] Task Name` to `- [x] Task Name`
+- Changes only the matching task in the Story YAML record.
 - Output: `✅ Task updated` or `❌ Task not found`
 
 ### archive -- Archive completed Stories
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py archive
 ```
-- Moves all Stories with every task marked `[x]` to `docs/product/archive/archive_YYYYMM.md`
+- Marks completed Story records as `archived`; no shared archive file is appended.
 
 ### list_stories -- View current Stories
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py list_stories
+```
+
+### render -- Explicitly generate/check Board projection
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py render
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py render --check
 ```
 
 ### snapshot -- Architecture snapshot
@@ -53,11 +60,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py snapshot "v1
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-board/scripts/board.py fix_board
 ```
-- Scans for stories outside their correct section and relocates them based on task status:
-  - All `[ ]` → `## 📋 Backlog`
-  - Mixed `[ ]`/`[x]` → `## 🔄 In Progress`
-  - All `[x]` → `## ✅ Done`
-- Output: `✅ Board fixed: N stories relocated.` or `✅ No misplaced stories found.`
+- Rebuilds the deterministic projection from Story records; it never parses the projection as facts.
 
 ## Usage Scenarios
 - `/project-plan`: Use `add_story` to create a Story

@@ -15,7 +15,7 @@ Read-only project state report. Provides sprint board summary, git state, and he
 ## Protocol
 
 ### 1. Gather Data
-- Check if `docs/product/sprint_board.md` exists.
+- Check if `docs/product/stories/` exists; accept legacy `docs/product/sprint_board.md` only with a migration warning.
 - If yes: extract story counts by section (Backlog / In Progress / Done).
 - Count Specs in `docs/specs/*.md` vs total board stories.
 - Check architecture graph freshness.

@@ -1,6 +1,7 @@
 ---
 name: pactkit-audit
 description: "H1-H7 AI Readiness Assessment — harness audit scoring and hotspot analysis"
+model: sonnet
 ---
 
 # PactKit Audit

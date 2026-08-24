@@ -1,39 +1,31 @@
 ---
-description: "Standalone requirement clarification before planning"
-allowed-tools: [Read, Bash, Glob, Grep]
+description: "Execute project-clarify through Core-owned bounded WorkUnits"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: Clarify (v1.1.0)
-- **Usage**: `/project-clarify "$ARGUMENTS"`
-- **Agent**: System Architect
+# Command: project-clarify — Managed WorkUnit Facade
+- **Usage**: /project-clarify "$ARGUMENTS"
 
-> **PURPOSE**: Standalone requirement clarification. Run before `/project-plan` to surface ambiguities and assess risks upfront.
 
-## Phase 1: Ambiguity Analysis
-1.  Analyze `$ARGUMENTS` against the AMBIGUITY_SIGNALS checklist (same as Plan Phase 0.7).
-2.  Generate 3–6 structured questions (Scope, Users, Constraints, Scale, Edge Cases, Non-Goals).
-3.  Ask questions in the user's language.
+## Pre-Final Protocol (MUST)
+Run and obey `pactkit workflow contract project-clarify --json`. Before final run `pactkit workflow finish-guard <run-id> --json`: `continue_current_turn` means continue; only `done`/`await_user` ends. Progress is not final.
 
-## Phase 2: Pre-mortem Risk Probe
-> **PURPOSE**: Reverse thinking — identify how the plan could fail before it starts.
-1.  Based on `$ARGUMENTS` and Phase 1 findings, generate 1–2 pre-mortem questions (pick the most relevant):
-    - "If this feature is deemed a failure 1 month after launch, what is the most likely reason?"
-    - "What assumptions does this plan rely on? Which assumption is the most fragile?"
-    - "What will the person maintaining this code in 6 months complain about the most?"
-    - "What is the most likely integration point to break?"
-2.  Ask in the user's language, together with Phase 1 questions.
-3.  Total questions across Phase 1 + Phase 2 MUST NOT exceed 6. If Phase 1 already has 5–6, pick only 1 pre-mortem question. If Phase 1 has ≤ 4, pick up to 2.
+Core is the only workflow scheduler and completion authority for this command.
 
-## Phase 3: Clarified Brief Output
-1.  After user responses, produce a **Clarified Brief**:
-    ```markdown
-    ## Clarified Brief: {feature name}
-    - **Scope**: {confirmed operations}
-    - **Users**: {confirmed target users / roles}
-    - **Constraints**: {technical constraints}
-    - **Scale**: {performance expectations}
-    - **Edge Cases**: {failure scenarios and expected behavior}
-    - **Non-Goals**: {explicitly excluded}
-    - **Risks**: {top 1-2 identified risks from pre-mortem}
-    ```
-2.  Output: "Ready for Plan. Run: `/project-plan \"{clarified brief summary}\"`"
+1. Start with `pactkit work-unit start project-clarify --goal "$ARGUMENTS"`.
+2. Run `pactkit-codex-work-unit run <run-id> --owner codex`. The runner persists
+   and resumes one App Server thread, dispatches only the current Core WorkUnit,
+   and submits structured EvidenceReceipts for deterministic validation.
+3. If the runner returns `retry`, invoke the same run command again; Core versions
+   the failed or expired lease and resumes at the same WorkUnit.
+4. If it returns `await_user`, show the listed manual operations and wait for explicit
+   authorization. Resume with one `--authorize <operation>` per approved operation.
+5. `done` is valid only after Core's journaled finalizer accepts the terminal WorkUnit.
+
+Never select, skip, or mark a WorkUnit complete from prose. Never call the finalizer
+from inside a model turn. Do not perform commit, push, tag, publish, release, pull-request,
+or orchestration operations unless the runner received matching explicit authorization.
+Portable/manual hosts may acquire and submit one WorkUnit at a time and must use
+`pactkit work-unit finalize-workflow` for non-Plan terminal units.
+Canonical portable methods remain discoverable under `{SKILLS_ROOT}/`; their
+legacy checkpoint files are compatibility evidence only and never schedule managed runs.

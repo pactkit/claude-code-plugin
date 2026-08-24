@@ -56,40 +56,23 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py list
 | `--focus` (call) | `docs/architecture/graphs/focus_call_graph.mmd` | graph TD |
 
 ## Usage Scenarios
-- `/project-plan`: Run `visualize` to understand current project state before making design decisions
-- `/project-act`: Run `visualize --focus <module>` to understand dependencies of the modification target
-- `pactkit-doctor` skill: Run `visualize` to check whether architecture graphs can be generated correctly
-- `pactkit-trace` skill: Run `visualize --mode call --entry <func>` to trace call chains
+- `project-plan`, `project-act`, and `pactkit-trace` use `pactkit query --json --explain` for analysis.
+- Use `visualize` only to explicitly regenerate derived Mermaid projections.
+- `pactkit-doctor` checks graph-provider health and derived graph status.
 
 ## Graph Query Protocol
 
 > **MUST NOT `Read` a full `.mmd` graph file** — graph files are large (50K–120K, 1000–2000+ lines). Full reads waste tokens before any work begins.
 
-### Codegraph Mode (when `graph_provider: codegraph` in pactkit.yaml)
-
-Setup: `codegraph init` (first time), `codegraph sync` (after code changes).
-When codegraph MCP server is running, file changes auto-sync (2-second debounce).
+### Unified Query Router
 
 ```bash
-# Unified pactkit query (reads .codegraph/codegraph.db):
-pactkit query --callers atomic_write
-pactkit query --callees deploy
-pactkit query --chain atomic_write       # transitive upstream
-pactkit query --chain deploy --down      # transitive downstream
-
-# Direct codegraph CLI — run `codegraph --help` for full command list.
+pactkit query --callers atomic_write --json --explain
+pactkit query --callees deploy --json --explain
+pactkit query --chain atomic_write --json --explain
+pactkit query --chain deploy --down --json --explain
+pactkit query --explore deployer --json --explain
+pactkit query --impact deploy --json --explain
 ```
 
-MCP tools (if codegraph MCP server configured): run `codegraph --help` or check ToolSearch for available `codegraph_*` tools.
-
-### Grep Mode (default — when graph_provider not set, use .mmd files)
-
-```bash
-grep " --> .*deployer" docs/architecture/graphs/code_graph.mmd  # fan-in (importers)
-grep "deployer.* --> " docs/architecture/graphs/code_graph.mmd  # fan-out (deps)
-grep " --> .*deployer" docs/architecture/graphs/code_graph.mmd | wc -l  # count
-grep "my_func" docs/architecture/graphs/call_graph.mmd  # call-level
-grep "MyClass" docs/architecture/graphs/class_graph.mmd  # class-level
-```
-
-**Fallback rule**: If grep returns 0 results, fall back to full `Read`.
+The router owns Codegraph health, bounded sync, and provider selection. Configured Codegraph fails closed. Only an explicit `--allow-fallback` may select `builtin_graph` and then `text_search`; a healthy empty result never triggers fallback.

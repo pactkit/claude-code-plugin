@@ -1,6 +1,7 @@
 ---
 name: pactkit-visualize
 description: "Generate project code dependency graph (Mermaid), supporting file-level, class-level, function-level, and module-level analysis"
+model: haiku
 ---
 
 # PactKit Visualize
@@ -55,7 +56,23 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-visualize/scripts/visualize.py list
 | `--focus` (call) | `docs/architecture/graphs/focus_call_graph.mmd` | graph TD |
 
 ## Usage Scenarios
-- `/project-plan`: Run `visualize` to understand current project state before making design decisions
-- `/project-act`: Run `visualize --focus <module>` to understand dependencies of the modification target
-- `pactkit-doctor` skill: Run `visualize` to check whether architecture graphs can be generated correctly
-- `pactkit-trace` skill: Run `visualize --mode call --entry <func>` to trace call chains
+- `project-plan`, `project-act`, and `pactkit-trace` use `pactkit query --json --explain` for analysis.
+- Use `visualize` only to explicitly regenerate derived Mermaid projections.
+- `pactkit-doctor` checks graph-provider health and derived graph status.
+
+## Graph Query Protocol
+
+> **MUST NOT `Read` a full `.mmd` graph file** — graph files are large (50K–120K, 1000–2000+ lines). Full reads waste tokens before any work begins.
+
+### Unified Query Router
+
+```bash
+pactkit query --callers atomic_write --json --explain
+pactkit query --callees deploy --json --explain
+pactkit query --chain atomic_write --json --explain
+pactkit query --chain deploy --down --json --explain
+pactkit query --explore deployer --json --explain
+pactkit query --impact deploy --json --explain
+```
+
+The router owns Codegraph health, bounded sync, and provider selection. Configured Codegraph fails closed. Only an explicit `--allow-fallback` may select `builtin_graph` and then `text_search`; a healthy empty result never triggers fallback.

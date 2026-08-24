@@ -1,6 +1,7 @@
 ---
 name: pactkit-release
 description: "Version release: snapshot, archive, Git tag, and GitHub Release"
+model: sonnet
 ---
 
 # PactKit Release

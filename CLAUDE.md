@@ -1,4 +1,4 @@
-# PactKit Global Constitution (v2.12.0 Modular)
+# PactKit Global Constitution (v2.21.0 Modular)
 
 # Workflow Conventions
 
@@ -51,24 +51,6 @@ Choosing WORKAROUND is allowed, but incurs the cost of creating a tracking Story
 - **Tools**: `resolve-library-id` → `get-library-docs`
 - **Trigger**: If you are about to write code using a third-party library and are unsure about the API
 
-### shadcn (`mcp__shadcn__*`)
-- **Purpose**: Search, browse, and install UI components from shadcn registries
-- **When to use**: If the project has a `components.json` file in the project root (indicates shadcn is configured)
-- **Tools**: `search_items_in_registries`, `view_items_in_registries`, `get_item_examples_from_registries`, `get_add_command_for_items`
-- **Trigger**: If designing or implementing UI pages and `components.json` exists
-
-### Playwright MCP (`mcp__playwright__*`)
-- **Purpose**: Browser automation for testing — snapshots, clicks, screenshots, form filling
-- **When to use**: If `mcp__playwright__browser_snapshot` tool is available in the current runtime
-- **Tools**: `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_take_screenshot`, `browser_fill_form`
-- **Trigger**: If running browser-level QA checks (Check command Strategy B)
-
-### Chrome DevTools MCP (`mcp__chrome-devtools__*`)
-- **Purpose**: Performance tracing, console message inspection, network request analysis
-- **When to use**: If `mcp__chrome-devtools__take_snapshot` tool is available in the current runtime
-- **Tools**: `performance_start_trace`, `list_console_messages`, `list_network_requests`, `take_snapshot`, `take_screenshot`
-- **Trigger**: If running browser-level QA checks that need performance or runtime diagnostics
-
 ### Memory MCP (`mcp__memory__*`)
 - **Purpose**: Persistent knowledge graph for cross-session context — store architectural decisions, load prior context, record lessons learned
 - **When to use**: If `mcp__memory__create_entities` tool is available in the current runtime
@@ -76,27 +58,19 @@ Choosing WORKAROUND is allowed, but incurs the cost of creating a tracking Story
 - **Trigger**: If running Plan (store decisions), Act (load context), or Done (record lessons)
 - **Entity naming**: Use `{STORY_ID}` (e.g., "STORY-037") as the entity name, `entityType: "story"`
 
-### Draw.io MCP (`mcp__drawio__*`)
-- **Purpose**: Open generated diagrams directly in Draw.io editor for instant visual verification and interactive editing
-- **When to use**: If `mcp__drawio__open_drawio_xml` tool is available in the current runtime
-- **Tools**: `open_drawio_xml`, `open_drawio_csv`, `open_drawio_mermaid`
-- **Trigger**: After generating a `.drawio` XML file or when visualizing existing `.mmd` Mermaid files in Draw.io
-
 ## Usage by PDCA Phase
 
 | Phase | MCP Server | Condition |
 |-------|-----------|-----------|
 | **Plan** | Memory | If `mcp__memory__*` tools are available |
-| **Plan** | Draw.io MCP | If `mcp__drawio__*` tools are available (diagram generation) |
-| **Design** | shadcn | If `components.json` exists in project root |
-| **Design** | Draw.io MCP | If `mcp__drawio__*` tools are available (architecture visualization) |
 | **Act** | Context7 | If implementing with unfamiliar library API |
 | **Act** | Memory | If `mcp__memory__*` tools are available |
-| **Check** | Playwright MCP | If `mcp__playwright__*` tools are available |
-| **Check** | Chrome DevTools | If `mcp__chrome-devtools__*` tools are available |
 | **Done** | Memory | If `mcp__memory__*` tools are available |
 
 # Shared Protocols
+
+## Managed Workflow and Pre-Final Protocol
+Every `project-*` command starts or resumes its registered run, checkpoints each declared boundary, and completes only with verified evidence. Before final output run `pactkit workflow finish-guard <run-id> --json`. A non-zero or `continue_current_turn` decision means continue tools at `next_step` in the same turn; progress summaries are never final. Only `done` or a verified external `await_user` blocker may end. Manual operations such as commit, archive, tag, publish, release, push, and pull request always require fresh authorization.
 
 ## Lazy Visualize Protocol
 > Referenced by: Act Phase 4, Done Phase 2
@@ -108,10 +82,10 @@ If source files changed (per `LANG_PROFILES[stack].source_dirs`) OR `code_graph.
 
 Map changed source files to test files via `LANG_PROFILES[stack].test_map_pattern`. If no mapping can be determined, fall back to the full test suite.
 
-## Context.md Canonical Format
+## Local Context Projection Format
 > Referenced by: Init Phase 6, Plan Phase 3, Act Phase 4, Done Phase 4.5
 
-Write `docs/product/context.md` using this format:
+Generate ignored `.pactkit/context.md` using this format:
 ```markdown
 # Project Context (Auto-generated)
 > Last updated: {ISO timestamp} by {command}
@@ -129,7 +103,7 @@ Write `docs/product/context.md` using this format:
 {git branch output, or "None" if no feature/fix branches}
 
 ## Key Decisions
-{Last 5 lessons from lessons.md}
+{Last 5 records from docs/architecture/governance/lessons/}
 
 ## Next Recommended Action
 {If In Progress: `/project-act STORY-XXX` | If Backlog only: `/project-plan` | If empty: `/project-design`}
@@ -468,17 +442,80 @@ Do not import from higher-level modules into lower-level modules. Domain/core im
 | **pactkit-trace** | Trace = call chains (vertical). This protocol = capability reuse (horizontal). Run Trace first, then this. |
 | **Hierarchy of Truth** | Output goes into Spec (Tier 1). Implementation MUST follow Technical Design in Spec. |
 
+# Engineering Concerns — Trigger Index
+
+> Referenced by: Plan Phase 2, Act Phase 1.5
+> Signal Level: L2 Strong (MUST)
+> This file is a routing table. Detailed guidance lives in guides/ files loaded on demand.
+
+## Plan Phase: NFR Decision Gate
+
+When writing Spec's Technical Design, scan requirement keywords.
+If matched, the Spec MUST include a decision for that concern:
+
+| Keyword in Requirement | Concern | Spec Must Answer |
+|------------------------|---------|-----------------|
+| 定时/cron/schedule/parallel/concurrent/多线程/多进程 | concurrency | Concurrency model? (sync/async/threads/processes) |
+| async/await/异步/event loop/协程 | async-patterns | Sync or async architecture? Blocking call strategy? |
+| API/HTTP/webhook/第三方/external/REST/gRPC | api-integration | Timeout? Retry count? Circuit breaker? Fallback? |
+| 数据库/DB/SQL/ORM/query/transaction/事务 | database | Connection pool? Lock strategy? Transaction scope? |
+| 缓存/cache/Redis/Memcached/内存数据库 | caching | Strategy? TTL? Consistency? Eviction? |
+| event/消息/queue/publish/subscribe/通知/MQ | event-driven | Sync/async delivery? Idempotency? DLQ? |
+| 配置/config/环境变量/secret/密钥 | configuration | Config layering? Secret management? |
+| log/日志/监控/metrics/trace/observability | observability | Log library? Level strategy? Trace ID? |
+| 模块/module/抽象/decouple/拆分/重构 | module-design | Module boundary? Single responsibility? |
+| timeout/超时/熔断/降级/circuit/breaker/阻塞 | resilience | Timeout strategy? Fallback? Health check? |
+| 内存/memory/leak/GC/OOM/streaming/大文件 | memory-management | Bounded collections? Streaming? Cleanup? |
+| 复用/reuse/已有/existing/library/依赖 | component-reuse | Stdlib? Project existing? Third-party? |
+| review/代码审查/架构/convention/约定 | code-review-first | Exemplar file? Existing patterns? |
+| retry/重试/backoff/幂等/idempoten/partial failure | error-recovery | Retry strategy? Backoff? Idempotency? Partial failure? |
+| 一致性/consistency/saga/补偿/idempotency key/分布式事务 | data-consistency | Transaction scope? Compensation? Optimistic lock? |
+| 兼容/backward/breaking change/deprecat/migration/版本 | backwards-compatibility | API version? Non-breaking migration? Deprecation? |
+| N+1/unbounded/分页/pagina/index/索引/热路径/hot path | performance-antipatterns | Pagination? Batch fetch? Index? Cache? |
+| shutdown/优雅关闭/SIGTERM/drain/信号处理 | graceful-shutdown | Signal handler? Drain timeout? Cleanup order? |
+| 测试策略/test strategy/mock/stub/boundary/隔离/isolation | testing-strategy | Mock vs real? Boundary tests? Test isolation? |
+
+Unmatched concerns → do not appear in Spec (avoid noise).
+
+## Act Phase: Guide Loading Table
+
+After reading Spec's Technical Design, load ONLY the matched guides:
+
+| Concern | Guide File |
+|---------|-----------|
+| concurrency | {GUIDES_PATH}/concurrency.md |
+| async-patterns | {GUIDES_PATH}/async-patterns.md |
+| configuration | {GUIDES_PATH}/configuration.md |
+| observability | {GUIDES_PATH}/observability.md |
+| module-design | {GUIDES_PATH}/module-design.md |
+| database | {GUIDES_PATH}/database.md |
+| caching | {GUIDES_PATH}/caching.md |
+| api-integration | {GUIDES_PATH}/api-integration.md |
+| event-driven | {GUIDES_PATH}/event-driven.md |
+| resilience | {GUIDES_PATH}/resilience.md |
+| memory-management | {GUIDES_PATH}/memory-management.md |
+| code-review-first | {GUIDES_PATH}/code-review-first.md |
+| component-reuse | {GUIDES_PATH}/component-reuse.md |
+| error-recovery | {GUIDES_PATH}/error-recovery.md |
+| data-consistency | {GUIDES_PATH}/data-consistency.md |
+| backwards-compatibility | {GUIDES_PATH}/backwards-compatibility.md |
+| performance-antipatterns | {GUIDES_PATH}/performance-antipatterns.md |
+| graceful-shutdown | {GUIDES_PATH}/graceful-shutdown.md |
+| testing-strategy | {GUIDES_PATH}/testing-strategy.md |
+
+MUST load only 1-3 relevant guides. NEVER load all 19.
+
 # Core Protocol
 
 ## Session Context
 On new session, run `pactkit update --if-needed` to sync project files if PactKit was upgraded.
 If `pactkit.yaml` does not exist (check `{PROJECT_CONFIG_DIR}/`), run `pactkit init` to create it before proceeding.
-Then read `docs/product/context.md` to understand project state before taking action.
+Then run `pactkit context` and read `.pactkit/context.md` to understand project state before taking action.
 If the file is missing, suggest `/project-init` to bootstrap the project.
 If "Last updated" date is before today, suggest running `$daily-retro`.
 
 ## PDCA Nudge
-When AI analysis in free conversation (outside PDCA command context) yields actionable conclusions — bugs, architecture improvements, new feature needs — SHOULD recommend the appropriate PDCA command at the end of the reply. See the PDCA Nudge Protocol section below for trigger matrix and suppression rules.
+When free-conversation analysis yields actionable bugs, architecture improvements, or features, SHOULD recommend the appropriate PDCA command. See PDCA Nudge Protocol below.
 
 ## Visual First
 Before modifying code:
@@ -570,7 +607,8 @@ When skipping a SHOULD requirement, leave a traceable comment:
 |------|---------|
 | `docs/specs/{ID}.md` | **The Law** -- Requirement Specifications (Spec) |
 | `commands/*.md` | **The Playbooks** -- Command Execution Logic |
-| `docs/product/sprint_board.md` | Sprint Board -- Current Iteration Board |
+| `docs/product/stories/{ITEM_ID}.yaml` | Story workflow/task facts |
+| `docs/product/sprint_board.md` | Optional read-only Board projection |
 | `docs/test_cases/{ID}_case.md` | Test Cases -- Gherkin Acceptance Scenarios |
 | `docs/architecture/graphs/*.mmd` | Architecture Graphs -- Mermaid Architecture Diagrams |
 | `tests/unit/` | Unit Tests |
@@ -589,7 +627,7 @@ When skipping a SHOULD requirement, leave a traceable comment:
 ### Init (`/project-init`)
 - **Role**: System Architect
 - **Playbook**: `commands/project-init.md`
-- **When NOT to use**: Project already has `pactkit.yaml` and `docs/product/sprint_board.md`. Use `pactkit update` instead to sync after upgrades.
+- **When NOT to use**: Project already has `pactkit.yaml` and `docs/product/stories/`. Use `pactkit update` instead to sync after upgrades.
 
 ### Plan (`/project-plan`)
 - **Role**: System Architect

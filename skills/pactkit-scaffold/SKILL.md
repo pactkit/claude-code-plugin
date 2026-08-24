@@ -1,6 +1,7 @@
 ---
 name: pactkit-scaffold
 description: "File scaffolding: create Spec, test files, E2E tests, Git branches, Skills"
+model: haiku
 ---
 
 # PactKit Scaffold
@@ -55,16 +56,16 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create
 - Output: `${CLAUDE_PLUGIN_ROOT}/skills/{skill-name}/` with `SKILL.md`, `scripts/{clean_name}.py`, `references/.gitkeep`
 - Refuses to overwrite if the skill directory already exists
 
-### create_board -- Create Sprint Board
+### create_board -- Initialize Story Facts
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pactkit-scaffold/scripts/scaffold.py create_board
 ```
-- Creates `docs/product/sprint_board.md` with standard section headers
+- Creates `docs/product/stories/`; use `pactkit board render` only for an explicit projection
 - Output: Standard board with `## 📋 Backlog`, `## 🔄 In Progress`, `## ✅ Done` sections
 - Refuses to overwrite if the board already exists
 
 ## Usage Scenarios
-- `/project-init`: Use `create_board` to create Sprint Board (Phase 4)
+- `/project-init`: Use `create_board` to initialize Story facts (Phase 4)
 - `/project-plan`: Use `create_spec` to create a Spec template
 - `/project-act`: Use `create_test_file` to create test scaffolding
 - `/project-check`: Use `create_e2e_test` to create E2E tests

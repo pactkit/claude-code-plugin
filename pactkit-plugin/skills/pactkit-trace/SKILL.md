@@ -4,6 +4,9 @@ description: "Deep code tracing and execution flow analysis"
 model: sonnet
 ---
 
+## Provider Routing (MUST)
+Start every callers, callees, chain, explore or impact trace with `pactkit query ... --json --explain`. When `graph_provider: codegraph` is configured, Codegraph is mandatory and failures are closed by default. Never select Mermaid or grep yourself; only use `--allow-fallback` when the caller explicitly authorizes degradation, and retain the provider decision as evidence. A healthy empty result is `valid_empty`, not a fallback signal.
+
 # PactKit Trace
 
 Deep code analysis and execution path tracing via static analysis.
@@ -15,12 +18,12 @@ Deep code analysis and execution path tracing via static analysis.
 ## Protocol
 
 ### 1. Feature Discovery
-- Use `Grep` to locate entry points (API route, CLI arg, Event handler).
+- Use `pactkit query --explore <target> --json --explain` to locate entry points.
 - Map core files involved — don't read everything yet.
 
 ### 2. Call Graph Analysis
-- Run `visualize --mode call --entry <function_name>` to obtain call chains.
-- Query callers/callees: use `pactkit query --callers/--callees <func>` (when graph_provider: codegraph), or grep `docs/architecture/graphs/call_graph.mmd`.
+- Run `pactkit query --chain <function_name> --json --explain` to obtain call chains.
+- Query callers/callees through the same router; never select Codegraph, Mermaid, SQLite, or text search directly.
 
 ### 3. Deep Tracing
 - Follow call chain file by file, recording data transformations.

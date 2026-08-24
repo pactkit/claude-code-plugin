@@ -1,6 +1,7 @@
 ---
 name: pactkit-analyze
 description: "Cross-artifact consistency check: Spec ↔ Board ↔ Test Cases"
+model: sonnet
 ---
 # Skill: pactkit-analyze
 

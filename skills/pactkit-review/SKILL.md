@@ -1,6 +1,7 @@
 ---
 name: pactkit-review
 description: "PR Code Review with structured SOLID, security, and quality checklists"
+model: sonnet
 ---
 
 # PactKit Review
