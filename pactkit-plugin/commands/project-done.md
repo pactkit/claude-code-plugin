@@ -29,3 +29,4 @@ Portable/manual hosts may acquire and submit one WorkUnit at a time and must use
 `pactkit work-unit finalize-workflow` for non-Plan terminal units.
 Canonical portable methods remain discoverable under `{SKILLS_ROOT}/`; their
 legacy checkpoint files are compatibility evidence only and never schedule managed runs.
+
