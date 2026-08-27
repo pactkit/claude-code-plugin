@@ -30,7 +30,7 @@ Version release management — update versions, snapshot architecture, create Gi
 ### 2.5. Pre-Tag Gate (CRITICAL)
 - Run lint: `pactkit lint` (falls back to `ruff check src/ tests/`).
 - Run tests: `pactkit regression` (falls back to `pytest tests/ -q`).
-- If either fails: **STOP. Do NOT tag.** Fix the issue, re-commit, then re-run this gate.
+- If either fails, do not tag, publish, or create the release. Report the evidence; fix it when authorized, then re-run this gate in the current session.
 - Report: `Pre-tag gate: PASS` or `Pre-tag gate: FAIL (details)`.
 
 ### 3. Git Operations

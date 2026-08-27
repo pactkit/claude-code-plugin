@@ -1,32 +1,49 @@
 ---
-description: "Execute project-sprint through Core-owned bounded WorkUnits"
+description: "Sequential PDCA in the current session"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
-# Command: project-sprint — Managed WorkUnit Facade
-- **Usage**: /project-sprint "$ARGUMENTS"
+# Command: Sprint (Current-Session PDCA Orchestrator)
+- **Usage**: `/project-sprint "$ARGUMENTS"`
+- **Execution**: Continue sequentially in this conversation. Keep all phase
+  evidence in the current session unless the user explicitly chooses another
+  supported execution mode.
 
+## Resolve work
 
-## Pre-Final Protocol (MUST)
-Run and obey `pactkit workflow contract project-sprint --json`. Before final run `pactkit workflow finish-guard <run-id> --json`: `continue_current_turn` means continue; only `done`/`await_user` ends. Progress is not final.
+In single-story mode, resolve an existing Story ID from the argument. For a new
+requirement, run `pactkit generate-id`, carry that STORY-ID into Plan, and use
+its `docs/specs/{STORY_ID}.md` as the file-driven contract.
 
-Core is the only workflow scheduler and completion authority for this command.
+In Wave Mode (empty arguments), inspect the board and `pactkit spec-graph
+--json` to produce a deterministic Wave Plan. Process eligible Stories
+sequentially by dependency order. Do not use `max_parallel` unless the user
+explicitly requests parallel execution; unknown or conflicting touch surfaces
+remain serialized.
 
-1. Start with `pactkit work-unit start project-sprint --goal "$ARGUMENTS"`.
-2. Run `pactkit-codex-work-unit run <run-id> --owner codex`. The runner persists
-   and resumes one App Server thread, dispatches only the current Core WorkUnit,
-   and submits structured EvidenceReceipts for deterministic validation.
-3. If the runner returns `retry`, invoke the same run command again; Core versions
-   the failed or expired lease and resumes at the same WorkUnit.
-4. If it returns `await_user`, show the listed manual operations and wait for explicit
-   authorization. Resume with one `--authorize <operation>` per approved operation.
-5. `done` is valid only after Core's journaled finalizer accepts the terminal WorkUnit.
+## Phase capsule lifecycle
 
-Never select, skip, or mark a WorkUnit complete from prose. Never call the finalizer
-from inside a model turn. Do not perform commit, push, tag, publish, release, pull-request,
-or orchestration operations unless the runner received matching explicit authorization.
-Portable/manual hosts may acquire and submit one WorkUnit at a time and must use
-`pactkit work-unit finalize-workflow` for non-Plan terminal units.
-Canonical portable methods remain discoverable under `{SKILLS_ROOT}/`; their
-legacy checkpoint files are compatibility evidence only and never schedule managed runs.
-When parallel execution is unavailable, execute Plan → Act → Check → Close sequentially through the Core-issued phase WorkUnits.
+Keep exactly one active phase. Before entering a phase, use the host Read tool
+to read its managed capsule below; do not treat this list as Markdown imports:
+
+- Plan: `{SKILLS_ROOT}/_rules/phases/plan-contract.md`
+- Act: `{SKILLS_ROOT}/_rules/phases/act-contract.md`
+- Check: `{SKILLS_ROOT}/_rules/phases/check-contract.md`
+- Done: `{SKILLS_ROOT}/_rules/phases/done-contract.md`
+
+Then execute the corresponding native command playbook in order:
+
+1. Plan — create or update the Spec and Story.
+2. Act — implement and produce fresh, adequate behavior evidence.
+3. Check — perform QA for security, quality, scope, tests, and Spec alignment.
+4. Done — close the Story only when requested external effects are authorized.
+
+When a phase finishes, mark its capsule historical and activate only the next
+capsule. A failed Check returns to Act for repair in this same session. Missing
+evidence makes completion incomplete; it does not lock reading, implementation,
+testing, or repair and does not require restarting Sprint.
+
+## Completion
+
+Report the active Story, changed files, phase evidence, tests, and remaining
+gaps. Never infer success from an old workflow state or an agent response.

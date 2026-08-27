@@ -185,6 +185,14 @@ def _mark_done(content, story_match, story_block, old_task):
     return content[: story_match.start()] + new_block + content[story_match.end() :]
 
 
+def add_task(sid, task_title):
+    try:
+        _story_repository().add_task(sid, " ".join(task_title))
+        return f"✅ Task added to {sid}"
+    except (RuntimeError, ValueError) as exc:
+        return f"❌ {exc}"
+
+
 def update_task(sid, tasks_list):
     task_name = " ".join(tasks_list)
     try:
@@ -428,6 +436,9 @@ if __name__ == "__main__":
     p_add.add_argument("story_id")
     p_add.add_argument("title")
     p_add.add_argument("tasks")
+    p_addtask = sub.add_parser("add_task")
+    p_addtask.add_argument("story_id")
+    p_addtask.add_argument("task_title", nargs="+")
     p_upd = sub.add_parser("update_task")
     p_upd.add_argument("story_id")
     p_upd.add_argument("task_name", nargs="+")
@@ -445,6 +456,8 @@ if __name__ == "__main__":
     a = parser.parse_args()
     if a.cmd == "add_story":
         print(add_story(a.story_id, a.title, a.tasks))
+    elif a.cmd == "add_task":
+        print(add_task(a.story_id, a.task_title))
     elif a.cmd == "update_task":
         print(update_task(a.story_id, a.task_name))
     elif a.cmd == "snapshot":

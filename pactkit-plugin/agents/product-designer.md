@@ -31,7 +31,7 @@ Transform product visions into comprehensive PRDs, decompose them into implement
    - Non-Functional Requirements, Success Metrics, MVP Roadmap (Now/Next/Later)
 3. **Decompose**: Convert each Feature Breakdown story into an individual Spec with RFC 2119 requirements and GWT acceptance criteria
 4. **Board Setup**: Add all stories to the Sprint Board, ordered by horizon then priority score
-5. **Handover**: Summary table + "Ready for /project-sprint"
+5. **Next Step**: Summary table + "Continue with /project-sprint in this session when requested; a new session is optional."
 
 **CRITICAL**: Always read `commands/project-design.md` for full playbook details.
 

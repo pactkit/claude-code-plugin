@@ -1,32 +1,21 @@
 ---
-description: "Execute project-release through Core-owned bounded WorkUnits"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep]
+description: "Version release: snapshot, archive, Git tag, and GitHub Release"
+allowed-tools: [Read, Write, Edit, Bash, Glob]
 ---
 
-# Command: project-release — Managed WorkUnit Facade
-- **Usage**: /project-release "$ARGUMENTS"
+# Command: Release (v1.4.0)
+- **Usage**: `/project-release`
+- **Agent**: Repo Maintainer
 
+## 🧠 Phase 0: Pre-flight Check
+1.  **Version Detection**: Check if `pyproject.toml` version was changed vs the previous commit.
+    - Run `git diff HEAD~1 pyproject.toml | grep version` (or vs branch base)
+    - Capture the new version value (e.g., `1.4.1`).
+    - If no version change is detected: print "ℹ️ No version bump detected. Update `pyproject.toml` version before releasing." Do not tag, publish, or create a release; safe release diagnosis remains available.
+2.  **Read Config**: Read `pactkit.yaml` to detect stack and release configuration.
 
-## Pre-Final Protocol (MUST)
-Run and obey `pactkit workflow contract project-release --json`. Before final run `pactkit workflow finish-guard <run-id> --json`: `continue_current_turn` means continue; only `done`/`await_user` ends. Progress is not final.
-
-Core is the only workflow scheduler and completion authority for this command.
-
-1. Start with `pactkit work-unit start project-release --goal "$ARGUMENTS"`.
-2. Run `pactkit-codex-work-unit run <run-id> --owner codex`. The runner persists
-   and resumes one App Server thread, dispatches only the current Core WorkUnit,
-   and submits structured EvidenceReceipts for deterministic validation.
-3. If the runner returns `retry`, invoke the same run command again; Core versions
-   the failed or expired lease and resumes at the same WorkUnit.
-4. If it returns `await_user`, show the listed manual operations and wait for explicit
-   authorization. Resume with one `--authorize <operation>` per approved operation.
-5. `done` is valid only after Core's journaled finalizer accepts the terminal WorkUnit.
-
-Never select, skip, or mark a WorkUnit complete from prose. Never call the finalizer
-from inside a model turn. Do not perform commit, push, tag, publish, release, pull-request,
-or orchestration operations unless the runner received matching explicit authorization.
-Portable/manual hosts may acquire and submit one WorkUnit at a time and must use
-`pactkit work-unit finalize-workflow` for non-Plan terminal units.
-Canonical portable methods remain discoverable under `{SKILLS_ROOT}/`; their
-legacy checkpoint files are compatibility evidence only and never schedule managed runs.
-
+## 🎬 Phase 1: Invoke pactkit-release Skill
+1.  **Delegate to skill**: Invoke the `pactkit-release` skill with `VERSION={version}` from Phase 0.
+    - The skill handles the full release protocol:
+      Version Update → Spec Backfill → Architecture Snapshot → Git Operations → GitHub Release.
+    - Pass the detected version so the skill skips its own auto-detection step.

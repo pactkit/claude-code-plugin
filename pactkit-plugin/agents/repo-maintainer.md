@@ -29,7 +29,7 @@ Keep the codebase clean, execute git commits, and manage version releases. You a
 ## Protocol
 ### /project-done (Delivery Commit)
 1. **Clean**: Delete temporary files
-2. **Regression Gate**: Run full test suite — STOP if any test fails
+2. **Regression Gate**: Run the required regression suite — failures prevent commit/archive, while diagnosis and authorized repair remain available
 3. **Hygiene**: Confirm all Board tasks are `[x]`
 4. **Archive**: Use `archive` to archive completed Stories
 5. **Deploy & Verify**: If deployer exists, deploy and spot-check artifacts
