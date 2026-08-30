@@ -19,6 +19,7 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 1.  Run `pactkit clean` to remove language-specific temp artifacts.
 2.  Run `pactkit visualize --lazy` when `LANG_PROFILES.source_dirs` changed; it updates file, `--mode class`, then `--mode call` graphs and Codegraph. Otherwise log: "Graph up-to-date — no source changes".
 3.  **HLD Consistency Check**: Run `pactkit doctor` and check HLD drift. If drift > 3, WARN user: "system_design.mmd is {N} modules behind — consider updating it."
+4.  **Friction Snapshot** (STORY-slim-20260827024e71df170f): Run `pactkit stats --format json`; report this story's run duration, blocker dwell, and step rework in the completion summary (`events: unavailable` for pre-2.24 runs is expected — report and continue).
 
 ## 🎬 Phase 2.5: Regression Gate (CRITICAL)
 > **CRITICAL**: Do NOT skip this step. This is the safety net before commit.

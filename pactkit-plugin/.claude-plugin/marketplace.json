@@ -11,7 +11,7 @@
     {
       "name": "pactkit",
       "source": "./pactkit-plugin",
-      "version": "2.23.0",
+      "version": "2.25.0",
       "description": "PDCA workflows, role-based agents, and behavioral governance"
     }
   ]

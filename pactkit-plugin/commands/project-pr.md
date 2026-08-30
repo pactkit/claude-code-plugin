@@ -22,6 +22,10 @@ allowed-tools: [Read, Write, Edit, Bash, Glob]
 2.  **If push fails**: Do not create the PR. Report the error and preserve the local branch for retry.
 
 ## 🎬 Phase 2: PR Generation
+0.  **Authorization (ask-first)**: creating the PR is an external-effect
+    operation. Confirm with the user, then run `pactkit gate authorize pr`
+    to open the audited window before `gh pr create` (the auth-gate hook
+    blocks it otherwise).
 1.  **Generate PR Title**: Format `{type}({scope}): {spec_title}`
     - `type`: `feat` for STORY, `fix` for BUG/HOTFIX
     - `scope`: infer from primary modified directory
