@@ -1,0 +1,4 @@
+# Plugin release flow direct-pushes main (release-managed deployment
+# repo); same owner-approved exemption as the adapter repos (2026-09-01).
+enforcement:
+  allow_direct_push: true

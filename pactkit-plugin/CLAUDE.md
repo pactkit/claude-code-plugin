@@ -1,4 +1,4 @@
-# PactKit Runtime Contract (v2.25.0)
+# PactKit Runtime Contract (v2.25.1)
 
 # PactKit Runtime Contract
 
